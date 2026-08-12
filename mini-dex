@@ -84,7 +84,7 @@ local function getClassColor(instance)
     return defaultColor
 end
 
--- Expanded Service Map
+-- Service Map
 local services = {
     ["Workspace"] = Workspace,
     ["Players"] = Players,
@@ -105,16 +105,14 @@ local optionalServices = {
     ["TweenService"] = TweenService,
     ["HttpService"] = HttpService,
     ["RunService"] = RunService,
-    ["ContextActionService"] = ContextActionService,
-    ["JointsService"] = pcall(function() return game:GetService("JointsService") end) and game:GetService("JointsService") or nil,
-    ["CoreGui"] = pcall(function() return CoreGui end) and CoreGui or nil
+    ["ContextActionService"] = ContextActionService
 }
 
 for name, service in pairs(optionalServices) do
     if service then services[name] = service end
 end
 
--- ScreenGui
+-- ScreenGui Setup
 local gui = Instance.new("ScreenGui")
 gui.Name = "ExpandedWorkspaceExplorer"
 gui.ResetOnSpawn = false
@@ -131,7 +129,7 @@ main.BorderColor3 = Color3.fromRGB(55, 55, 55)
 main.Active = true
 main.Parent = gui
 
--- Draggable Toggle Button
+-- Toggle Button
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "DexToggleBtn"
 toggleBtn.Size = UDim2.new(0, 48, 0, 26)
@@ -197,7 +195,7 @@ closeBtn.Font = Enum.Font.SourceSansBold
 closeBtn.Parent = header
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
 
--- Service Switcher
+-- Service Switcher Bar
 local serviceScroll = Instance.new("ScrollingFrame")
 serviceScroll.Name = "ServiceScroll"
 serviceScroll.Size = UDim2.new(1, -4, 0, 24)
@@ -213,7 +211,7 @@ serviceLayout.SortOrder = Enum.SortOrder.LayoutOrder
 serviceLayout.Padding = UDim.new(0, 2)
 serviceLayout.Parent = serviceScroll
 
--- Search Bar
+-- Search Bar Frame
 local searchFrame = Instance.new("Frame")
 searchFrame.Size = UDim2.new(1, -4, 0, 22)
 searchFrame.Position = UDim2.new(0, 2, 0, 52)
@@ -233,7 +231,7 @@ searchBox.Name = "SearchBox"
 searchBox.Size = UDim2.new(1, -22, 1, 0)
 searchBox.Position = UDim2.new(0, 20, 0, 0)
 searchBox.BackgroundTransparency = 1
-searchBox.PlaceholderText = "Fuzzy search name, class, path, attribute..."
+searchBox.PlaceholderText = "Search name, class, path..."
 searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
 searchBox.Text = ""
 searchBox.TextColor3 = Color3.fromRGB(240, 240, 240)
@@ -243,7 +241,7 @@ searchBox.TextXAlignment = Enum.TextXAlignment.Left
 searchBox.ClearTextOnFocus = false
 searchBox.Parent = searchFrame
 
--- State & Navigation
+-- Navigation Setup
 local currentParent = Workspace
 local selectedObject = nil
 local lastCopiedData = ""
@@ -375,7 +373,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Comprehensive Property List
+-- Extended Property Names
 local extendedProps = {
     "ClassName", "Parent", "Name", "Value", "ToolTip", "TextureId", "SoundId", "Volume", "Playing",
     "PrimaryPart", "Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight",
@@ -384,10 +382,10 @@ local extendedProps = {
     "Archivable", "PlaybackSpeed", "TimePosition", "Looped", "RollOffMaxDistance", "RollOffMinDistance",
     "FieldOfView", "CameraType", "Brightness", "ClockTime", "FogEnd", "FogStart", "Ambient", "OutdoorAmbient",
     "Adornee", "AlwaysOnTop", "StudsPerTileU", "StudsPerTileV", "Face", "Part0", "Part1", "C0", "C1",
-    "Intensity", "Range", "Enabled", "Color", "Size", "Texture", "Lifetime", "Rate", "Speed", "SpreadAngle"
+    "Intensity", "Range", "Enabled", "Lifetime", "Rate", "Speed", "SpreadAngle"
 }
 
--- Precise Code Path Formatting Generator
+-- Exact Code Path Formatting
 local function getExactCodePath(obj)
     if not obj then return "" end
     local pathParts = {}
@@ -408,10 +406,12 @@ local function getExactCodePath(obj)
     if string.sub(path, 1, 1) == "." then
         path = string.sub(path, 2)
     end
-    return "game:GetService(\"" .. obj:GetFullName():split(".")[1] .. "\")" .. string.sub(path, string.len(obj:GetFullName():split(".")[1]) + 1)
+    
+    local rootName = obj:GetFullName():split(".")[1] or "Workspace"
+    return "game:GetService(\"" .. rootName .. "\")" .. string.sub(path, string.len(rootName) + 1)
 end
 
--- Deep Inspection Function
+-- Safe Data Lines Extraction
 local function getObjectDataLines(obj)
     local fullPath = obj:GetFullName()
     local exactCodePath = getExactCodePath(obj)
@@ -433,8 +433,8 @@ local function getObjectDataLines(obj)
             elseif typeof(val) == "Color3" then
                 strVal = string.format("Color3.fromRGB(%d, %d, %d)", math.floor(val.R*255), math.floor(val.G*255), math.floor(val.B*255))
             elseif typeof(val) == "CFrame" then
-                local components = {val:GetComponents()}
-                strVal = string.format("CFrame.new(" .. string.rep("%.2f, ", 11) .. "%.2f)", table.unpack(components))
+                local p = val.Position
+                strVal = string.format("CFrame.new(%.2f, %.2f, %.2f)", p.X, p.Y, p.Z)
             elseif typeof(val) == "Instance" then
                 strVal = val:GetFullName()
             end
@@ -442,21 +442,23 @@ local function getObjectDataLines(obj)
         end
     end
 
-    local attributes = obj:GetAttributes()
-    for attrName, attrValue in pairs(attributes) do
-        local strVal = tostring(attrValue)
-        if typeof(attrValue) == "Vector3" then
-            strVal = string.format("Vector3.new(%.4f, %.4f, %.4f)", attrValue.X, attrValue.Y, attrValue.Z)
-        elseif typeof(attrValue) == "Color3" then
-            strVal = string.format("Color3.fromRGB(%d, %d, %d)", math.floor(attrValue.R*255), math.floor(attrValue.G*255), math.floor(attrValue.B*255))
+    local attrSuccess, attributes = pcall(function() return obj:GetAttributes() end)
+    if attrSuccess and attributes then
+        for attrName, attrValue in pairs(attributes) do
+            local strVal = tostring(attrValue)
+            if typeof(attrValue) == "Vector3" then
+                strVal = string.format("Vector3.new(%.4f, %.4f, %.4f)", attrValue.X, attrValue.Y, attrValue.Z)
+            elseif typeof(attrValue) == "Color3" then
+                strVal = string.format("Color3.fromRGB(%d, %d, %d)", math.floor(attrValue.R*255), math.floor(attrValue.G*255), math.floor(attrValue.B*255))
+            end
+            table.insert(lines, "[Attr] " .. attrName .. ": " .. strVal)
         end
-        table.insert(lines, "[Attr] " .. attrName .. ": " .. strVal)
     end
 
     return lines
 end
 
--- Load Properties UI
+-- Properties UI Loading
 local function loadProperties(obj)
     selectedObject = obj
     lastCopiedData = ""
@@ -487,33 +489,29 @@ local function loadProperties(obj)
     propScroll.CanvasSize = UDim2.new(0, 0, 0, count * 15)
 end
 
--- Fuzzy Search Match Engine
+-- Fuzzy Search Engine
 local function isFuzzyMatch(instance, query)
     if query == "" then return true end
     local q = string.lower(query)
     
-    -- Check Name and ClassName
     if string.find(string.lower(instance.Name), q, 1, true) then return true end
     if string.find(string.lower(instance.ClassName), q, 1, true) then return true end
-    
-    -- Check Path
     if string.find(string.lower(instance:GetFullName()), q, 1, true) then return true end
 
-    -- Check Attributes
-    local attrs = instance:GetAttributes()
-    for attrName, attrVal in pairs(attrs) do
-        if string.find(string.lower(attrName), q, 1, true) or string.find(string.lower(tostring(attrVal)), q, 1, true) then
-            return true
+    local attrSuccess, attrs = pcall(function() return instance:GetAttributes() end)
+    if attrSuccess and attrs then
+        for attrName, attrVal in pairs(attrs) do
+            if string.find(string.lower(attrName), q, 1, true) or string.find(string.lower(tostring(attrVal)), q, 1, true) then
+                return true
+            end
         end
     end
 
     return false
 end
 
--- Forward declaration
 local renderDirectory
 
--- Deep Workspace Search Traversal
 local function getMatchingDescendants(parent, query)
     local matches = {}
     local function traverse(target)
@@ -534,4 +532,11 @@ function renderDirectory(target)
     pathLabel.Text = " " .. target:GetFullName()
 
     for _, v in ipairs(explorerScroll:GetChildren()) do
- 
+        if not v:IsA("UIListLayout") then v:Destroy() end
+    end
+
+    local filteredChildren = {}
+    local isSearchMode = activeFilter ~= ""
+
+    if isSearchMode then
+        filteredChildren = getMatchin
