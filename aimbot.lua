@@ -17,7 +17,8 @@ local states = {
     separateBtnVisible = false,
     smoothAim = false,
     smoothness = 0.15,
-    wallCheck = true
+    wallCheck = true,
+    maxDistance = 100 -- Default stud distance range
 }
 
 -- Utility Functions
@@ -90,8 +91,8 @@ screenGui.Parent = getGuiParent()
 
 local frame = Instance.new("Frame")
 frame.Name = getRandomName()
-frame.Size = UDim2.new(0, 210, 0, 225)
-frame.Position = UDim2.new(0.5, -105, 0.4, -112)
+frame.Size = UDim2.new(0, 210, 0, 255)
+frame.Position = UDim2.new(0.5, -105, 0.4, -127)
 frame.BackgroundColor3 = Color3.fromRGB(15, 16, 20)
 frame.BorderSizePixel = 0
 frame.Visible = false
@@ -132,13 +133,14 @@ closeBtn.Parent = header
 applyCorner(closeBtn, 4)
 closeBtn.MouseButton1Click:Connect(function() frame.Visible = false end)
 
+-- Main Menu Toggle Button
 local menuToggleBtn = Instance.new("TextButton")
 menuToggleBtn.Name = getRandomName()
 menuToggleBtn.Size = UDim2.new(0, 50, 0, 26)
 menuToggleBtn.Position = UDim2.new(0.01, 0, 0.2, 0)
 menuToggleBtn.BackgroundColor3 = Color3.fromRGB(22, 24, 31)
 menuToggleBtn.BorderSizePixel = 0
-menuToggleBtn.Text = "AIM"
+menuToggleBtn.Text = "MENU"
 menuToggleBtn.TextColor3 = Color3.fromRGB(139, 92, 246)
 menuToggleBtn.Font = Enum.Font.Code
 menuToggleBtn.TextSize = 11
@@ -152,6 +154,7 @@ menuToggleBtn.MouseButton1Click:Connect(function()
     frame.Visible = not frame.Visible 
 end)
 
+-- Separate On-Screen Quick Aimlock Toggle Button
 local quickAimBtn = Instance.new("TextButton")
 quickAimBtn.Name = getRandomName()
 quickAimBtn.Size = UDim2.new(0, 75, 0, 26)
@@ -218,14 +221,41 @@ quickAimBtn.MouseButton1Click:Connect(function()
     setAimState(not states.aimlock)
 end)
 
-createToggleBtn("Aimlock Button: OFF", UDim2.new(0, 6, 0, 60), function(btn)
+createToggleBtn("Separate Aim Button: OFF", UDim2.new(0, 6, 0, 60), function(btn)
     states.separateBtnVisible = not states.separateBtnVisible
     quickAimBtn.Visible = states.separateBtnVisible
-    btn.Text = "Aimlock Button: " .. (states.separateBtnVisible and "ON" or "OFF")
+    btn.Text = "Separate Aim Button: " .. (states.separateBtnVisible and "ON" or "OFF")
     btn.TextColor3 = states.separateBtnVisible and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
 end)
 
-createToggleBtn("Smooth Aim: OFF", UDim2.new(0, 6, 0, 88), function(btn)
+-- Range Input Bar (Studs Input Box)
+local rangeBox = Instance.new("TextBox")
+rangeBox.Name = getRandomName()
+rangeBox.Size = UDim2.new(1, -12, 0, 24)
+rangeBox.Position = UDim2.new(0, 6, 0, 88)
+rangeBox.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
+rangeBox.BorderSizePixel = 0
+rangeBox.Text = "Range (Studs): 100"
+rangeBox.PlaceholderText = "Enter range in studs..."
+rangeBox.TextColor3 = Color3.fromRGB(160, 165, 180)
+rangeBox.Font = Enum.Font.Code
+rangeBox.TextSize = 10
+rangeBox.ClearTextOnFocus = false
+rangeBox.Parent = frame
+applyCorner(rangeBox, 4)
+applyStroke(rangeBox, Color3.fromRGB(38, 40, 52), 1)
+
+rangeBox.FocusLost:Connect(function()
+    local val = tonumber(rangeBox.Text:match("%d+"))
+    if val then
+        states.maxDistance = val
+        rangeBox.Text = "Range (Studs): " .. tostring(val)
+    else
+        rangeBox.Text = "Range (Studs): " .. tostring(states.maxDistance)
+    end
+end)
+
+createToggleBtn("Smooth Aim: OFF", UDim2.new(0, 6, 0, 116), function(btn)
     states.smoothAim = not states.smoothAim
     btn.Text = "Smooth Aim: " .. (states.smoothAim and "ON" or "OFF")
     btn.TextColor3 = states.smoothAim and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
@@ -238,7 +268,7 @@ local speedPresets = {
 }
 local currentSpeedIdx = 2
 
-createToggleBtn("Smooth Speed: Medium", UDim2.new(0, 6, 0, 116), function(btn)
+createToggleBtn("Smooth Speed: Medium", UDim2.new(0, 6, 0, 144), function(btn)
     currentSpeedIdx = (currentSpeedIdx % #speedPresets) + 1
     local preset = speedPresets[currentSpeedIdx]
     states.smoothness = preset.speed
@@ -246,7 +276,7 @@ createToggleBtn("Smooth Speed: Medium", UDim2.new(0, 6, 0, 116), function(btn)
     btn.TextColor3 = Color3.fromRGB(139, 92, 246)
 end)
 
-createToggleBtn("Wall Check: ON", UDim2.new(0, 6, 0, 144), function(btn)
+createToggleBtn("Wall Check: ON", UDim2.new(0, 6, 0, 172), function(btn)
     states.wallCheck = not states.wallCheck
     btn.Text = "Wall Check: " .. (states.wallCheck and "ON" or "OFF")
     btn.TextColor3 = states.wallCheck and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
@@ -270,13 +300,13 @@ local function isVisible(origin, targetPos, zombie, char)
     return true
 end
 
--- Valid Target Acquisition System
+-- Valid Target Acquisition System with Range Check
 local function getNearestTarget(hrp, char)
     local zombiesFolder = Workspace:FindFirstChild("Zombies")
     if not zombiesFolder then return nil end
 
     local closestHead = nil
-    local shortestDist = math.huge
+    local shortestDist = states.maxDistance
     local hrpPos = hrp.Position
     local eyePos = hrpPos + Vector3.new(0, 1.5, 0)
     local children = zombiesFolder:GetChildren()
@@ -284,12 +314,11 @@ local function getNearestTarget(hrp, char)
     for i = 1, #children do
         local zombie = children[i]
         local zHum = zombie:FindFirstChildOfClass("Humanoid")
-        -- Filter out dead or despawned zombies
         if zombie.Parent and zHum and zHum.Health > 0 then
             local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
             if zHead then
                 local dist = (hrpPos - zHead.Position).Magnitude
-                if dist < shortestDist then
+                if dist <= shortestDist then
                     if isVisible(eyePos, zHead.Position, zombie, char) then
                         shortestDist = dist
                         closestHead = zHead
@@ -308,7 +337,7 @@ local mainLoopConnection
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
 disableBtn.Size = UDim2.new(1, -12, 0, 24)
-disableBtn.Position = UDim2.new(0, 6, 0, 182)
+disableBtn.Position = UDim2.new(0, 6, 0, 210)
 disableBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 25)
 disableBtn.BorderSizePixel = 0
 disableBtn.Text = "UNLOAD SCRIPT"
