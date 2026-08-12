@@ -18,15 +18,11 @@ local states = {
     aimType = "Camera", -- "Camera" or "Body"
     targetPart = "Head", -- "Head" or "Torso"
     snapType = "Smooth", -- "Snappy" or "Smooth"
-    smoothness = 0.15,
-    wallCheck = true,
-    maxDistance = 100,
+    smoothness = 0.2,
+    wallCheck = false, -- Default set to false so it works out of the box
+    maxDistance = 200,
     noCamLimit = false
 }
-
--- Default Camera Zoom Storage
-local defaultMaxZoom = lp.CameraMaxZoomDistance
-local defaultMinZoom = lp.CameraMinZoomDistance
 
 -- Utility Functions
 local function getRandomName()
@@ -90,7 +86,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- UI Setup
+-- UI Construction
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = getRandomName()
 screenGui.ResetOnSpawn = false
@@ -119,7 +115,7 @@ makeDraggable(header, frame)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -26, 1, 0)
 title.Position = UDim2.new(0, 8, 0, 0)
-title.Text = "OBSIDIAN // AIMBOT"
+title.Text = "OBSIDIAN // AIMBOT V2"
 title.TextColor3 = Color3.fromRGB(139, 92, 246)
 title.Font = Enum.Font.Code
 title.TextSize = 11
@@ -161,7 +157,7 @@ menuToggleBtn.MouseButton1Click:Connect(function()
     frame.Visible = not frame.Visible 
 end)
 
--- Separate Quick Aimlock Toggle Button
+-- Separate Quick Aim Toggle Button
 local quickAimBtn = Instance.new("TextButton")
 quickAimBtn.Name = getRandomName()
 quickAimBtn.Size = UDim2.new(0, 75, 0, 26)
@@ -197,7 +193,6 @@ local function createToggleBtn(text, pos, onClick)
     return btn
 end
 
--- Controls Integration
 local mainAimBtn
 
 local function setAimState(enabled)
@@ -253,14 +248,13 @@ createToggleBtn("Targeting Style: Smooth", UDim2.new(0, 6, 0, 144), function(btn
     btn.TextColor3 = Color3.fromRGB(139, 92, 246)
 end)
 
--- Range Input Bar
 local rangeBox = Instance.new("TextBox")
 rangeBox.Name = getRandomName()
 rangeBox.Size = UDim2.new(1, -12, 0, 24)
 rangeBox.Position = UDim2.new(0, 6, 0, 172)
 rangeBox.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
 rangeBox.BorderSizePixel = 0
-rangeBox.Text = "Range (Studs): 100"
+rangeBox.Text = "Range (Studs): 200"
 rangeBox.PlaceholderText = "Enter range..."
 rangeBox.TextColor3 = Color3.fromRGB(160, 165, 180)
 rangeBox.Font = Enum.Font.Code
@@ -280,12 +274,13 @@ rangeBox.FocusLost:Connect(function()
     end
 end)
 
-createToggleBtn("Wall Check: ON", UDim2.new(0, 6, 0, 200), function(btn)
+createToggleBtn("Wall Check: OFF", UDim2.new(0, 6, 0, 200), function(btn)
     states.wallCheck = not states.wallCheck
     btn.Text = "Wall Check: " .. (states.wallCheck and "ON" or "OFF")
     btn.TextColor3 = states.wallCheck and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
 end)
 
+local zoomConnection
 createToggleBtn("No Camera Zoom Limit: OFF", UDim2.new(0, 6, 0, 228), function(btn)
     states.noCamLimit = not states.noCamLimit
     btn.Text = "No Camera Zoom Limit: " .. (states.noCamLimit and "ON" or "OFF")
@@ -294,61 +289,76 @@ createToggleBtn("No Camera Zoom Limit: OFF", UDim2.new(0, 6, 0, 228), function(b
     if states.noCamLimit then
         lp.CameraMaxZoomDistance = 100000
         lp.CameraMinZoomDistance = 0.5
+        if not zoomConnection then
+            zoomConnection = RunService.Stepped:Connect(function()
+                if states.noCamLimit then
+                    lp.CameraMaxZoomDistance = 100000
+                    lp.CameraMinZoomDistance = 0.5
+                end
+            end)
+        end
     else
-        lp.CameraMaxZoomDistance = defaultMaxZoom or 400
-        lp.CameraMinZoomDistance = defaultMinZoom or 0.5
+        if zoomConnection then
+            zoomConnection:Disconnect()
+            zoomConnection = nil
+        end
+        lp.CameraMaxZoomDistance = 128
+        lp.CameraMinZoomDistance = 0.5
     end
 end)
 
--- Raycasting Logic
+-- Multi-source Search to Find Enemy Models Anywhere
+local function getTargetPart(model)
+    if states.targetPart == "Head" then
+        return model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+    else
+        return model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or model:FindFirstChild("HumanoidRootPart")
+    end
+end
+
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = RaycastFilterType.Exclude
 raycastParams.IgnoreWater = true
 
-local function isVisible(origin, targetPos, zombie, char)
+local function isVisible(origin, targetPos, targetModel, myChar)
     if not states.wallCheck then return true end
-
-    raycastParams.FilterDescendantsInstances = {char, zombie}
-    local direction = targetPos - origin
-    local result = Workspace:Raycast(origin, direction, raycastParams)
-
+    raycastParams.FilterDescendantsInstances = {myChar, targetModel}
+    local result = Workspace:Raycast(origin, targetPos - origin, raycastParams)
     if result then
-        return result.Instance:IsDescendantOf(zombie)
+        return result.Instance:IsDescendantOf(targetModel)
     end
     return true
 end
 
--- Part Resolver (Head vs Torso)
-local function getTargetPart(zombie)
-    if states.targetPart == "Head" then
-        return zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
-    else
-        return zombie:FindFirstChild("UpperTorso") or zombie:FindFirstChild("Torso") or zombie:FindFirstChild("HumanoidRootPart")
-    end
-end
-
--- Valid Target Acquisition System
-local function getNearestTarget(hrp, char)
-    local zombiesFolder = Workspace:FindFirstChild("Zombies")
-    if not zombiesFolder then return nil end
-
+local function findNearestEnemy(hrp, char)
     local closestPart = nil
     local shortestDist = states.maxDistance
     local hrpPos = hrp.Position
     local eyePos = hrpPos + Vector3.new(0, 1.5, 0)
-    local children = zombiesFolder:GetChildren()
 
-    for i = 1, #children do
-        local zombie = children[i]
-        local zHum = zombie:FindFirstChildOfClass("Humanoid")
-        if zombie.Parent and zHum and zHum.Health > 0 then
-            local zPart = getTargetPart(zombie)
-            if zPart then
-                local dist = (hrpPos - zPart.Position).Magnitude
-                if dist <= shortestDist then
-                    if isVisible(eyePos, zPart.Position, zombie, char) then
-                        shortestDist = dist
-                        closestPart = zPart
+    -- Collect all potential zombie/enemy models from Workspace and dedicated folders
+    local candidates = {}
+    local zombiesFolder = Workspace:FindFirstChild("Zombies") or Workspace:FindFirstChild("Enemies") or Workspace:FindFirstChild("NPCs")
+    
+    if zombiesFolder then
+        for _, v in ipairs(zombiesFolder:GetChildren()) do table.insert(candidates, v) end
+    else
+        for _, v in ipairs(Workspace:GetChildren()) do table.insert(candidates, v) end
+    end
+
+    for i = 1, #candidates do
+        local obj = candidates[i]
+        if obj ~= char and obj:IsA("Model") then
+            local zHum = obj:FindFirstChildOfClass("Humanoid")
+            if zHum and zHum.Health > 0 then
+                local part = getTargetPart(obj)
+                if part then
+                    local dist = (hrpPos - part.Position).Magnitude
+                    if dist <= shortestDist then
+                        if isVisible(eyePos, part.Position, obj, char) then
+                            shortestDist = dist
+                            closestPart = part
+                        end
                     end
                 end
             end
@@ -358,8 +368,8 @@ local function getNearestTarget(hrp, char)
     return closestPart
 end
 
--- Unload Button Initialization
-local mainLoopConnection
+-- Unload Button
+local renderLoopConnection
 
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
@@ -376,23 +386,20 @@ applyCorner(disableBtn, 4)
 applyStroke(disableBtn, Color3.fromRGB(80, 30, 40), 1)
 
 disableBtn.MouseButton1Click:Connect(function()
-    if mainLoopConnection then
-        mainLoopConnection:Disconnect()
-        mainLoopConnection = nil
-    end
+    if renderLoopConnection then renderLoopConnection:Disconnect() end
+    if zoomConnection then zoomConnection:Disconnect() end
 
     local char = lp.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if hum then hum.AutoRotate = true end
 
-    lp.CameraMaxZoomDistance = defaultMaxZoom or 400
-    lp.CameraMinZoomDistance = defaultMinZoom or 0.5
-
+    lp.CameraMaxZoomDistance = 128
+    lp.CameraMinZoomDistance = 0.5
     screenGui:Destroy()
 end)
 
--- Main Processing Loop
-mainLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
+-- Main Aim Loop (RenderStepped)
+renderLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
     if not states.aimlock then return end
 
     local char = lp.Character
@@ -402,36 +409,28 @@ mainLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
 
     if not hrp or not hum or not camera then return end
 
-    local targetPart = getNearestTarget(hrp, char)
+    local targetPart = findNearestEnemy(hrp, char)
+
     if targetPart then
         local targetPos = targetPart.Position
-        local lerpAlpha = (states.snapType == "Smooth") and math.clamp(states.smoothness * deltaTime * 60, 0.01, 1) or 1
+        local lerpFactor = (states.snapType == "Smooth") and math.clamp(states.smoothness * deltaTime * 60, 0.05, 1) or 1
 
         if states.aimType == "Body" then
-            -- Body Aim: Rotate character toward target, camera stays completely free
             hum.AutoRotate = false
             local lookAtPos = Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z)
             if (lookAtPos - hrp.Position).Magnitude > 0.01 then
                 local targetCFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-                hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, lerpAlpha)
+                hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, lerpFactor)
             end
         elseif states.aimType == "Camera" then
-            -- Camera Aim: Locks camera onto target, works in both Shift-Lock and normal modes
-            local isShiftLock = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
-
-            if isShiftLock then
-                hum.AutoRotate = true
-            else
-                hum.AutoRotate = false
-                local lookAtPos = Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z)
-                if (lookAtPos - hrp.Position).Magnitude > 0.01 then
-                    local targetCFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-                    hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, lerpAlpha)
-                end
+            hum.AutoRotate = false
+            local targetCamCFrame = CFrame.lookAt(camera.CFrame.Position, targetPos)
+            camera.CFrame = camera.CFrame:Lerp(targetCamCFrame, lerpFactor)
+            
+            local lookAtPos = Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z)
+            if (lookAtPos - hrp.Position).Magnitude > 0.01 then
+                hrp.CFrame = hrp.CFrame:Lerp(CFrame.lookAt(hrp.Position, lookAtPos), lerpFactor)
             end
-
-            local targetCameraCFrame = CFrame.lookAt(camera.CFrame.Position, targetPos)
-            camera.CFrame = camera.CFrame:Lerp(targetCameraCFrame, lerpAlpha)
         end
     else
         hum.AutoRotate = true
