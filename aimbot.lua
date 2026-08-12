@@ -1,5 +1,4 @@
--- PART 1 OF 2
-
+-- Services (Safe Executor Injection handling)
 local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
@@ -13,12 +12,22 @@ local Workspace = getService("Workspace")
 
 local lp = Players.LocalPlayer
 
+-- Global Script State Management
+local states = {
+    aimlock = false,
+    separateBtnVisible = false,
+    smoothAim = false,
+    smoothness = 0.15,
+    wallCheck = true
+}
+
+-- Utility Helpers
 local function getRandomName()
-    local str = ""
-    for _ = 1, math.random(8, 14) do
-        str = str .. string.char(math.random(97, 122))
+    local bytes = {}
+    for i = 1, math.random(8, 14) do
+        bytes[i] = math.random(97, 122)
     end
-    return str
+    return string.char(unpack(bytes))
 end
 
 local function getGuiParent()
@@ -27,23 +36,6 @@ local function getGuiParent()
     if ok and res then return res end
     return lp:WaitForChild("PlayerGui")
 end
-
--- Screen Container
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = getRandomName()
-screenGui.ResetOnSpawn = false
-screenGui.Parent = getGuiParent()
-
--- Main Obsidian Frame (Height adjusted for extra controls)
-local frame = Instance.new("Frame")
-frame.Name = getRandomName()
-frame.Size = UDim2.new(0, 210, 0, 225)
-frame.Position = UDim2.new(0.5, -105, 0.4, -112)
-frame.BackgroundColor3 = Color3.fromRGB(15, 16, 20)
-frame.BorderSizePixel = 0
-frame.Visible = false
-frame.Active = true
-frame.Parent = screenGui
 
 local function applyCorner(obj, radius)
     local corner = Instance.new("UICorner")
@@ -59,35 +51,56 @@ local function applyStroke(obj, color, thickness)
     stroke.Parent = obj
 end
 
-applyCorner(frame, 6)
-applyStroke(frame, Color3.fromRGB(50, 52, 68), 1)
-
--- Mobile Touch / Mouse Dragging Helper
+-- Efficient Shared Dragging Handler (Single Event Connection)
+local activeDrag = nil
 local function makeDraggable(guiObject, targetFrame)
-    local dragging, dragStart, startPos
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = targetFrame.Position
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            targetFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
+            activeDrag = {
+                target = targetFrame,
+                dragStart = input.Position,
+                startPos = targetFrame.Position
+            }
         end
     end)
 end
 
--- Obsidian Header Bar
+UserInputService.InputChanged:Connect(function(input)
+    if activeDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - activeDrag.dragStart
+        activeDrag.target.Position = UDim2.new(
+            activeDrag.startPos.X.Scale, 
+            activeDrag.startPos.X.Offset + delta.X, 
+            activeDrag.startPos.Y.Scale, 
+            activeDrag.startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if activeDrag and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        activeDrag = nil
+    end
+end)
+
+-- UI Construction
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = getRandomName()
+screenGui.ResetOnSpawn = false
+screenGui.Parent = getGuiParent()
+
+local frame = Instance.new("Frame")
+frame.Name = getRandomName()
+frame.Size = UDim2.new(0, 210, 0, 225)
+frame.Position = UDim2.new(0.5, -105, 0.4, -112)
+frame.BackgroundColor3 = Color3.fromRGB(15, 16, 20)
+frame.BorderSizePixel = 0
+frame.Visible = false
+frame.Active = true
+frame.Parent = screenGui
+applyCorner(frame, 6)
+applyStroke(frame, Color3.fromRGB(50, 52, 68), 1)
+
 local header = Instance.new("Frame")
 header.Size = UDim2.new(1, 0, 0, 26)
 header.BackgroundColor3 = Color3.fromRGB(22, 24, 31)
@@ -120,7 +133,6 @@ closeBtn.Parent = header
 applyCorner(closeBtn, 4)
 closeBtn.MouseButton1Click:Connect(function() frame.Visible = false end)
 
--- Menu Toggle Button
 local menuToggleBtn = Instance.new("TextButton")
 menuToggleBtn.Name = getRandomName()
 menuToggleBtn.Size = UDim2.new(0, 50, 0, 26)
@@ -135,11 +147,12 @@ menuToggleBtn.Active = true
 menuToggleBtn.Parent = screenGui
 applyCorner(menuToggleBtn, 4)
 applyStroke(menuToggleBtn, Color3.fromRGB(50, 52, 68), 1)
-
 makeDraggable(menuToggleBtn, menuToggleBtn)
-menuToggleBtn.MouseButton1Click:Connect(function() frame.Visible = not frame.Visible end)
 
--- Floating Quick Toggle Button for Main Aim
+menuToggleBtn.MouseButton1Click:Connect(function() 
+    frame.Visible = not frame.Visible 
+end)
+
 local quickAimBtn = Instance.new("TextButton")
 quickAimBtn.Name = getRandomName()
 quickAimBtn.Size = UDim2.new(0, 75, 0, 26)
@@ -155,17 +168,7 @@ quickAimBtn.Visible = false
 quickAimBtn.Parent = screenGui
 applyCorner(quickAimBtn, 4)
 applyStroke(quickAimBtn, Color3.fromRGB(50, 52, 68), 1)
-
 makeDraggable(quickAimBtn, quickAimBtn)
-
--- Script States
-local states = {
-    aimlock = false,
-    separateBtnVisible = false,
-    smoothAim = false,
-    smoothness = 0.20, -- Lower = Slower/Smoother turn speed (0.05 = Very slow, 1.0 = Instant)
-    wallCheck = true
-}
 
 local function createToggleBtn(text, pos, onClick)
     local btn = Instance.new("TextButton")
@@ -184,10 +187,10 @@ local function createToggleBtn(text, pos, onClick)
     btn.MouseButton1Click:Connect(function() onClick(btn) end)
     return btn
 end
--- PART 2 OF 2
 
--- Synchronized Aim Toggle Function
+-- Control Binding Variables
 local mainAimBtn
+
 local function setAimState(enabled)
     states.aimlock = enabled
     local stateTxt = states.aimlock and "ON" or "OFF"
@@ -229,7 +232,6 @@ createToggleBtn("Smooth Aim: OFF", UDim2.new(0, 6, 0, 88), function(btn)
     btn.TextColor3 = states.smoothAim and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
 end)
 
--- Smooth Speed Adjuster Button (Toggles through preset turn speeds)
 local speedPresets = {
     { speed = 0.05, label = "Slow" },
     { speed = 0.15, label = "Medium" },
@@ -237,7 +239,7 @@ local speedPresets = {
 }
 local currentSpeedIdx = 2
 
-local speedBtn = createToggleBtn("Smooth Speed: Medium", UDim2.new(0, 6, 0, 116), function(btn)
+createToggleBtn("Smooth Speed: Medium", UDim2.new(0, 6, 0, 116), function(btn)
     currentSpeedIdx = (currentSpeedIdx % #speedPresets) + 1
     local preset = speedPresets[currentSpeedIdx]
     states.smoothness = preset.speed
@@ -251,8 +253,59 @@ createToggleBtn("Wall Check: ON", UDim2.new(0, 6, 0, 144), function(btn)
     btn.TextColor3 = states.wallCheck and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
 end)
 
--- Unload Button
+-- Memory Optimization: Shared Raycasting Allocations
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = RaycastFilterType.Exclude
+raycastParams.IgnoreWater = true
+local filterTable = table.create(2)
+
+local function isVisible(origin, targetPos, zombie, char)
+    if not states.wallCheck then return true end
+
+    filterTable[1] = char
+    filterTable[2] = zombie
+    raycastParams.FilterDescendantsInstances = filterTable
+
+    local direction = targetPos - origin
+    local result = Workspace:Raycast(origin, direction, raycastParams)
+
+    if result then
+        return result.Instance:IsDescendantOf(zombie)
+    end
+    return true
+end
+
+-- Dynamic Targeting Engine
+local function getNearestTarget(hrp, char)
+    local zombiesFolder = Workspace:FindFirstChild("Zombies")
+    if not zombiesFolder then return nil end
+
+    local closestHead = nil
+    local shortestDist = math.huge
+    local hrpPos = hrp.Position
+    local eyePos = hrpPos + Vector3.new(0, 1.5, 0)
+    local children = zombiesFolder:GetChildren()
+
+    for i = 1, #children do
+        local zombie = children[i]
+        local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
+        if zHead then
+            local dist = (hrpPos - zHead.Position).Magnitude
+            if dist < shortestDist then
+                if isVisible(eyePos, zHead.Position, zombie, char) then
+                    shortestDist = dist
+                    closestHead = zHead
+                end
+            end
+        end
+    end
+
+    return closestHead
+end
+
+-- Render Loop & Unload System
 local mainLoopConnection
+
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
 disableBtn.Size = UDim2.new(1, -12, 0, 24)
@@ -280,52 +333,6 @@ disableBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Reusable RaycastParams Instance (Optimized to avoid garbage collection spikes)
-local raycastParams = RaycastParams.new()
-raycastParams.FilterType = RaycastFilterType.Exclude
-raycastParams.IgnoreWater = true
-
--- Wall Check Engine using Raycasting
-local function isVisible(origin, targetPos, zombie, char)
-    if not states.wallCheck then return true end
-
-    raycastParams.FilterDescendantsInstances = {char, zombie}
-    local direction = targetPos - origin
-    local result = Workspace:Raycast(origin, direction, raycastParams)
-
-    if result then
-        return result.Instance:IsDescendantOf(zombie)
-    end
-    return true
-end
-
--- Target Acquisition Engine
-local function getNearestTarget(hrp, char)
-    local zombiesFolder = Workspace:FindFirstChild("Zombies")
-    if not zombiesFolder then return nil end
-
-    local closestHead = nil
-    local shortestDist = math.huge
-
-    for _, zombie in ipairs(zombiesFolder:GetChildren()) do
-        if zombie.Parent then
-            local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
-            if zHead then
-                local dist = (hrp.Position - zHead.Position).Magnitude
-                if dist < shortestDist then
-                    if isVisible(hrp.Position + Vector3.new(0, 1.5, 0), zHead.Position, zombie, char) then
-                        shortestDist = dist
-                        closestHead = zHead
-                    end
-                end
-            end
-        end
-    end
-
-    return closestHead
-end
-
--- RenderStepped Main Loop (Frame-Rate Independent Lerping)
 mainLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
     local char = lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -339,8 +346,6 @@ mainLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
         if targetHead then
             local headPos = targetHead.Position
             local isShiftLock = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
-
-            -- Frame-rate independent lerp alpha adjustment
             local lerpAlpha = states.smoothAim and math.clamp(states.smoothness * deltaTime * 60, 0.01, 1) or 1
 
             if isShiftLock then
@@ -362,4 +367,3 @@ mainLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
         end
     end
 end)
-
