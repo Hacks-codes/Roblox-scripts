@@ -1,349 +1,60 @@
 -- ==========================================
--- MINI DEX EXPLORER - PART 1 / 2
+-- MINI DEX EXPLORER - PART 1: CORE FRAMEWORK
 -- ==========================================
 
 local CoreGui = game:GetService("CoreGui")
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ReplicatedFirst = game:GetService("ReplicatedFirst")
-local Lighting = game:GetService("Lighting")
-local StarterGui = game:GetService("StarterGui")
-local StarterPack = game:GetService("StarterPack")
-local Teams = game:GetService("Teams")
-local SoundService = game:GetService("SoundService")
-local MaterialService = game:GetService("MaterialService")
 local UserInputService = game:GetService("UserInputService")
-local TextChatService = game:GetService("TextChatService")
-local VoiceChatService = game:GetService("VoiceChatService")
-local PhysicsService = game:GetService("PhysicsService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-local ContextActionService = game:GetService("ContextActionService")
 
-local lp = Players.LocalPlayer
-
-local function getSafeGuiParent()
-    if gethui then return gethui() end
-    local success, result = pcall(function() return CoreGui:FindFirstChild("RobloxGui") end)
-    if success and result then return result end
-    return lp:WaitForChild("PlayerGui")
-end
-
-local classColors = {
-    Folder = Color3.fromRGB(240, 200, 80),
-    Model = Color3.fromRGB(255, 170, 40),
-    Part = Color3.fromRGB(0, 162, 255),
-    MeshPart = Color3.fromRGB(0, 180, 230),
-    UnionOperation = Color3.fromRGB(0, 140, 220),
-    Humanoid = Color3.fromRGB(255, 85, 85),
-    Player = Color3.fromRGB(255, 100, 100),
-    Script = Color3.fromRGB(50, 205, 50),
-    LocalScript = Color3.fromRGB(80, 220, 100),
-    ModuleScript = Color3.fromRGB(40, 180, 120),
-    Tool = Color3.fromRGB(180, 100, 255),
-    Accessory = Color3.fromRGB(200, 130, 255),
-    Shirt = Color3.fromRGB(200, 130, 255),
-    Pants = Color3.fromRGB(200, 130, 255),
-    StringValue = Color3.fromRGB(0, 220, 220),
-    NumberValue = Color3.fromRGB(0, 220, 220),
-    IntValue = Color3.fromRGB(0, 220, 220),
-    BoolValue = Color3.fromRGB(0, 220, 220),
-    ObjectValue = Color3.fromRGB(0, 220, 220),
-    CFrameValue = Color3.fromRGB(0, 220, 220),
-    Vector3Value = Color3.fromRGB(0, 220, 220),
-    Color3Value = Color3.fromRGB(0, 220, 220),
-    RemoteEvent = Color3.fromRGB(255, 100, 180),
-    RemoteFunction = Color3.fromRGB(255, 120, 200),
-    BindableEvent = Color3.fromRGB(255, 140, 150),
-    BindableFunction = Color3.fromRGB(255, 160, 170),
-    Sound = Color3.fromRGB(255, 200, 100),
-    ScreenGui = Color3.fromRGB(100, 200, 255),
-    Frame = Color3.fromRGB(120, 180, 240),
-    TextLabel = Color3.fromRGB(140, 190, 250),
-    TextButton = Color3.fromRGB(140, 190, 250),
-    ImageLabel = Color3.fromRGB(140, 190, 250),
-    ImageButton = Color3.fromRGB(140, 190, 250),
-    Team = Color3.fromRGB(255, 220, 100),
-    SpecialMesh = Color3.fromRGB(150, 200, 230),
-    PointLight = Color3.fromRGB(255, 255, 150),
-    SpotLight = Color3.fromRGB(255, 255, 150),
-    SurfaceLight = Color3.fromRGB(255, 255, 150),
-    ParticleEmitter = Color3.fromRGB(255, 150, 200),
-    Trail = Color3.fromRGB(255, 150, 200),
-    Beam = Color3.fromRGB(255, 150, 200),
-    Animation = Color3.fromRGB(180, 255, 180),
-    Animator = Color3.fromRGB(180, 255, 180)
+local MiniDex = {
+    CurrentParent = game:GetService("Workspace"),
+    SelectedObject = nil,
+    ActiveFilter = "",
+    ExportChunkSize = 25,
+    RegisteredFolders = {}
 }
 
-local defaultColor = Color3.fromRGB(210, 210, 210)
+-- Root GUI Container
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MiniDex_Modular"
+ScreenGui.ResetOnSpawn = false
 
-local function getClassColor(instance)
-    for className, color in pairs(classColors) do
-        if instance:IsA(className) then return color end
-    end
-    return defaultColor
+if gethui then
+    ScreenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = CoreGui
+else
+    ScreenGui.Parent = CoreGui
 end
 
-local services = {
-    ["Workspace"] = Workspace,
-    ["Players"] = Players,
-    ["ReplicatedStorage"] = ReplicatedStorage,
-    ["ReplicatedFirst"] = ReplicatedFirst,
-    ["Lighting"] = Lighting,
-    ["StarterGui"] = StarterGui,
-    ["StarterPack"] = StarterPack,
-    ["Teams"] = Teams,
-    ["SoundService"] = SoundService,
-    ["MaterialService"] = MaterialService
-}
-
-local optionalServices = {
-    ["TextChatService"] = TextChatService,
-    ["VoiceChatService"] = VoiceChatService,
-    ["PhysicsService"] = PhysicsService,
-    ["TweenService"] = TweenService,
-    ["HttpService"] = HttpService,
-    ["RunService"] = RunService,
-    ["ContextActionService"] = ContextActionService
-}
-
-for name, service in pairs(optionalServices) do
-    if service then services[name] = service end
-end
-
-local gui = Instance.new("ScreenGui")
-gui.Name = "ExpandedWorkspaceExplorer"
-gui.ResetOnSpawn = false
-gui.Parent = getSafeGuiParent()
-
+-- Main Window
 local main = Instance.new("Frame")
-main.Name = "MainFrame"
-main.Size = UDim2.new(0, 320, 0, 420)
-main.Position = UDim2.new(0.05, 0, 0.1, 0)
+main.Name = "Main"
+main.Size = UDim2.new(0, 460, 0, 320)
+main.Position = UDim2.new(0.5, -230, 0.5, -160)
 main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-main.BorderSizePixel = 1
-main.BorderColor3 = Color3.fromRGB(55, 55, 55)
+main.BorderSizePixel = 0
 main.Active = true
-main.Parent = gui
+main.Parent = ScreenGui
 
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Name = "DexToggleBtn"
-toggleBtn.Size = UDim2.new(0, 48, 0, 26)
-toggleBtn.Position = UDim2.new(0.01, 0, 0.1, 0)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-toggleBtn.BorderColor3 = Color3.fromRGB(80, 80, 80)
-toggleBtn.BorderSizePixel = 1
-toggleBtn.Text = "DEX"
-toggleBtn.TextColor3 = Color3.fromRGB(0, 220, 220)
-toggleBtn.TextSize = 11
-toggleBtn.Font = Enum.Font.SourceSansBold
-toggleBtn.Active = true
-toggleBtn.Parent = gui
-
-local toggleDragging, toggleStart, startPosToggle
-toggleBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        toggleDragging = true
-        toggleStart = input.Position
-        startPosToggle = toggleBtn.Position
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if toggleDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - toggleStart
-        toggleBtn.Position = UDim2.new(startPosToggle.X.Scale, startPosToggle.X.Offset + delta.X, startPosToggle.Y.Scale, startPosToggle.Y.Offset + delta.Y)
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        toggleDragging = false
-    end
-end)
-
-toggleBtn.MouseButton1Click:Connect(function()
-    main.Visible = not main.Visible
-end)
-
-local header = Instance.new("TextLabel")
-header.Name = "Header"
-header.Size = UDim2.new(1, 0, 0, 24)
-header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 25)
+header.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 header.BorderSizePixel = 0
-header.Text = "  Expanded Dex Explorer"
-header.TextColor3 = Color3.fromRGB(255, 255, 255)
-header.TextSize = 11
-header.Font = Enum.Font.SourceSansBold
-header.TextXAlignment = Enum.TextXAlignment.Left
 header.Parent = main
 
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 24, 0, 24)
-closeBtn.Position = UDim2.new(1, -24, 0, 0)
-closeBtn.BackgroundColor3 = Color3.fromRGB(190, 40, 40)
-closeBtn.BorderSizePixel = 0
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextSize = 11
-closeBtn.Font = Enum.Font.SourceSansBold
-closeBtn.Parent = header
-closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -10, 1, 0)
+title.Position = UDim2.new(0, 8, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Mini Dex — Modular Explorer"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 11
+title.Font = Enum.Font.SourceSansBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = header
 
-local serviceScroll = Instance.new("ScrollingFrame")
-serviceScroll.Name = "ServiceScroll"
-serviceScroll.Size = UDim2.new(1, -4, 0, 24)
-serviceScroll.Position = UDim2.new(0, 2, 0, 26)
-serviceScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-serviceScroll.BorderSizePixel = 0
-serviceScroll.ScrollBarThickness = 2
-serviceScroll.Parent = main
-
-local serviceLayout = Instance.new("UIListLayout")
-serviceLayout.FillDirection = Enum.FillDirection.Horizontal
-serviceLayout.SortOrder = Enum.SortOrder.LayoutOrder
-serviceLayout.Padding = UDim.new(0, 2)
-serviceLayout.Parent = serviceScroll
-
-local searchFrame = Instance.new("Frame")
-searchFrame.Size = UDim2.new(1, -4, 0, 22)
-searchFrame.Position = UDim2.new(0, 2, 0, 52)
-searchFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-searchFrame.BorderSizePixel = 0
-searchFrame.Parent = main
-
-local searchIcon = Instance.new("TextLabel")
-searchIcon.Size = UDim2.new(0, 20, 1, 0)
-searchIcon.BackgroundTransparency = 1
-searchIcon.Text = "🔍"
-searchIcon.TextSize = 9
-searchIcon.Parent = searchFrame
-
-local searchBox = Instance.new("TextBox")
-searchBox.Name = "SearchBox"
-searchBox.Size = UDim2.new(1, -22, 1, 0)
-searchBox.Position = UDim2.new(0, 20, 0, 0)
-searchBox.BackgroundTransparency = 1
-searchBox.PlaceholderText = "Search name, class, path..."
-searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-searchBox.Text = ""
-searchBox.TextColor3 = Color3.fromRGB(240, 240, 240)
-searchBox.TextSize = 10
-searchBox.Font = Enum.Font.SourceSans
-searchBox.TextXAlignment = Enum.TextXAlignment.Left
-searchBox.ClearTextOnFocus = false
-searchBox.Parent = searchFrame
-
-local currentParent = Workspace
-local selectedObject = nil
-local lastCopiedData = ""
-local activeFilter = ""
-
-local backBtn = Instance.new("TextButton")
-backBtn.Size = UDim2.new(0, 48, 0, 20)
-backBtn.Position = UDim2.new(0, 2, 0, 76)
-backBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-backBtn.BorderSizePixel = 0
-backBtn.Text = "◄ Back"
-backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-backBtn.TextSize = 10
-backBtn.Font = Enum.Font.SourceSans
-backBtn.Parent = main
-
-local pathLabel = Instance.new("TextLabel")
-pathLabel.Size = UDim2.new(1, -54, 0, 20)
-pathLabel.Position = UDim2.new(0, 52, 0, 76)
-pathLabel.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-pathLabel.BorderSizePixel = 0
-pathLabel.Text = " Workspace"
-pathLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-pathLabel.TextSize = 9
-pathLabel.Font = Enum.Font.SourceSans
-pathLabel.TextXAlignment = Enum.TextXAlignment.Left
-pathLabel.ClipsDescendants = true
-pathLabel.Parent = main
-
-local explorerScroll = Instance.new("ScrollingFrame")
-explorerScroll.Name = "ExplorerScroll"
-explorerScroll.Size = UDim2.new(1, -4, 0, 150)
-explorerScroll.Position = UDim2.new(0, 2, 0, 98)
-explorerScroll.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-explorerScroll.BorderSizePixel = 0
-explorerScroll.ScrollBarThickness = 4
-explorerScroll.Parent = main
-
-local explorerLayout = Instance.new("UIListLayout")
-explorerLayout.SortOrder = Enum.SortOrder.LayoutOrder
-explorerLayout.Parent = explorerScroll
-
-local propHeaderFrame = Instance.new("Frame")
-propHeaderFrame.Size = UDim2.new(1, -4, 0, 20)
-propHeaderFrame.Position = UDim2.new(0, 2, 0, 250)
-propHeaderFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-propHeaderFrame.BorderSizePixel = 0
-propHeaderFrame.Parent = main
-
-local propHeaderLabel = Instance.new("TextLabel")
-propHeaderLabel.Size = UDim2.new(1, -170, 1, 0)
-propHeaderLabel.BackgroundTransparency = 1
-propHeaderLabel.Text = " Deep Properties"
-propHeaderLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-propHeaderLabel.TextSize = 10
-propHeaderLabel.Font = Enum.Font.SourceSansBold
-propHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
-propHeaderLabel.Parent = propHeaderFrame
-
-local copyPathBtn = Instance.new("TextButton")
-copyPathBtn.Size = UDim2.new(0, 52, 1, -2)
-copyPathBtn.Position = UDim2.new(1, -166, 0, 1)
-copyPathBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 180)
-copyPathBtn.BorderSizePixel = 0
-copyPathBtn.Text = "Copy Path"
-copyPathBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-copyPathBtn.TextSize = 8
-copyPathBtn.Font = Enum.Font.SourceSansBold
-copyPathBtn.Parent = propHeaderFrame
-
-local copyBtn = Instance.new("TextButton")
-copyBtn.Size = UDim2.new(0, 54, 1, -2)
-copyBtn.Position = UDim2.new(1, -112, 0, 1)
-copyBtn.BackgroundColor3 = Color3.fromRGB(40, 130, 200)
-copyBtn.BorderSizePixel = 0
-copyBtn.Text = "Copy Props"
-copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-copyBtn.TextSize = 8
-copyBtn.Font = Enum.Font.SourceSansBold
-copyBtn.Parent = propHeaderFrame
-
-local copyAllBtn = Instance.new("TextButton")
-copyAllBtn.Size = UDim2.new(0, 54, 1, -2)
-copyAllBtn.Position = UDim2.new(1, -56, 0, 1)
-copyAllBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 40)
-copyAllBtn.BorderSizePixel = 0
-copyAllBtn.Text = "Copy All"
-copyAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-copyAllBtn.TextSize = 8
-copyAllBtn.Font = Enum.Font.SourceSansBold
-copyAllBtn.Parent = propHeaderFrame
-
-local propScroll = Instance.new("ScrollingFrame")
-propScroll.Name = "PropScroll"
-propScroll.Size = UDim2.new(1, -4, 0, 146)
-propScroll.Position = UDim2.new(0, 2, 0, 271)
-propScroll.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
-propScroll.BorderSizePixel = 0
-propScroll.ScrollBarThickness = 4
-propScroll.Parent = main
-
-local propLayout = Instance.new("UIListLayout")
-propLayout.SortOrder = Enum.SortOrder.LayoutOrder
-propLayout.Parent = propScroll
--- ==========================================
--- MINI DEX EXPLORER - PART 2 / 2
--- ==========================================
-
+-- Dragging Functionality
 local dragging, dragStart, startPos
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -366,18 +77,130 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
+-- Top Folder Selector Bar
+local folderScroll = Instance.new("ScrollingFrame")
+folderScroll.Size = UDim2.new(1, -10, 0, 22)
+folderScroll.Position = UDim2.new(0, 5, 0, 30)
+folderScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+folderScroll.BorderSizePixel = 0
+folderScroll.ScrollBarThickness = 2
+folderScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+folderScroll.Parent = main
+
+local folderLayout = Instance.new("UIListLayout")
+folderLayout.FillDirection = Enum.FillDirection.Horizontal
+folderLayout.Padding = UDim.new(0, 4)
+folderLayout.Parent = folderScroll
+
+-- Search Bar & Back Button
+local backBtn = Instance.new("TextButton")
+backBtn.Size = UDim2.new(0, 40, 0, 20)
+backBtn.Position = UDim2.new(0, 5, 0, 56)
+backBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+backBtn.BorderSizePixel = 0
+backBtn.Text = "< Back"
+backBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+backBtn.TextSize = 9
+backBtn.Font = Enum.Font.SourceSansBold
+backBtn.Parent = main
+
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -55, 0, 20)
+searchBox.Position = UDim2.new(0, 50, 0, 56)
+searchBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+searchBox.BorderSizePixel = 0
+searchBox.PlaceholderText = "Search instances/attributes..."
+searchBox.Text = ""
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.TextSize = 10
+searchBox.Font = Enum.Font.SourceSans
+searchBox.Parent = main
+
+local pathLabel = Instance.new("TextLabel")
+pathLabel.Size = UDim2.new(1, -10, 0, 16)
+pathLabel.Position = UDim2.new(0, 5, 0, 78)
+pathLabel.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+pathLabel.BorderSizePixel = 0
+pathLabel.Text = " Workspace"
+pathLabel.TextColor3 = Color3.fromRGB(150, 200, 255)
+pathLabel.TextSize = 9
+pathLabel.Font = Enum.Font.Code
+pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+pathLabel.Parent = main
+
+-- Main Explorer Panel
+local explorerScroll = Instance.new("ScrollingFrame")
+explorerScroll.Size = UDim2.new(0.5, -7, 1, -130)
+explorerScroll.Position = UDim2.new(0, 5, 0, 96)
+explorerScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+explorerScroll.BorderSizePixel = 0
+explorerScroll.ScrollBarThickness = 3
+explorerScroll.Parent = main
+
+local expLayout = Instance.new("UIListLayout")
+expLayout.SortOrder = Enum.SortOrder.LayoutOrder
+expLayout.Parent = explorerScroll
+
+-- Property Inspector Panel
+local propScroll = Instance.new("ScrollingFrame")
+propScroll.Size = UDim2.new(0.5, -7, 1, -130)
+propScroll.Position = UDim2.new(0.5, 2, 0, 96)
+propScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+propScroll.BorderSizePixel = 0
+propScroll.ScrollBarThickness = 3
+propScroll.Parent = main
+
+local propLayout = Instance.new("UIListLayout")
+propLayout.SortOrder = Enum.SortOrder.LayoutOrder
+propLayout.Parent = propScroll
+
+-- Action Buttons Bar
+local actionContainer = Instance.new("Frame")
+actionContainer.Size = UDim2.new(1, -10, 0, 24)
+actionContainer.Position = UDim2.new(0, 5, 1, -28)
+actionContainer.BackgroundTransparency = 1
+actionContainer.Parent = main
+
+local actionLayout = Instance.new("UIListLayout")
+actionLayout.FillDirection = Enum.FillDirection.Horizontal
+actionLayout.Padding = UDim.new(0, 4)
+actionLayout.Parent = actionContainer
+
+local function createActionButton(text, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 85, 1, 0)
+    btn.BackgroundColor3 = color
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 9
+    btn.Font = Enum.Font.SourceSansBold
+    btn.Parent = actionContainer
+    return btn
+end
+
+local copyPathBtn = createActionButton("Copy Path", Color3.fromRGB(120, 60, 180))
+local copyPropsBtn = createActionButton("Copy Props", Color3.fromRGB(40, 130, 200))
+local copyAllBtn = createActionButton("Copy All", Color3.fromRGB(200, 80, 40))
+
+-- Helper Logic
 local extendedProps = {
     "ClassName", "Parent", "Name", "Value", "ToolTip", "TextureId", "SoundId", "Volume", "Playing",
     "PrimaryPart", "Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight",
     "Position", "Size", "Orientation", "Anchored", "CanCollide", "CanQuery", "CanTouch", "Transparency", "Reflectance",
-    "Color", "Material", "Disabled", "UserId", "TeamColor", "AutoLoadCharacter",
-    "Archivable", "PlaybackSpeed", "TimePosition", "Looped", "RollOffMaxDistance", "RollOffMinDistance",
-    "FieldOfView", "CameraType", "Brightness", "ClockTime", "FogEnd", "FogStart", "Ambient", "OutdoorAmbient",
-    "Adornee", "AlwaysOnTop", "StudsPerTileU", "StudsPerTileV", "Face", "Part0", "Part1", "C0", "C1",
-    "Intensity", "Range", "Enabled", "Lifetime", "Rate", "Speed", "SpreadAngle"
+    "Color", "Material", "Disabled", "UserId", "TeamColor", "AutoLoadCharacter", "Archivable"
 }
 
-local function getExactCodePath(obj)
+local function getClassColor(inst)
+    if inst:IsA("Model") then return Color3.fromRGB(255, 170, 0) end
+    if inst:IsA("BasePart") then return Color3.fromRGB(0, 170, 255) end
+    if inst:IsA("Humanoid") then return Color3.fromRGB(255, 85, 85) end
+    if inst:IsA("Script") or inst:IsA("LocalScript") or inst:IsA("ModuleScript") then return Color3.fromRGB(85, 255, 127) end
+    if inst:IsA("ValueBase") then return Color3.fromRGB(255, 255, 127) end
+    return Color3.fromRGB(220, 220, 220)
+end
+
+function MiniDex.GetExactCodePath(obj)
     if not obj then return "" end
     local pathParts = {}
     local curr = obj
@@ -394,23 +217,17 @@ local function getExactCodePath(obj)
     end
 
     local path = table.concat(pathParts, "")
-    if string.sub(path, 1, 1) == "." then
-        path = string.sub(path, 2)
-    end
-    
+    if string.sub(path, 1, 1) == "." then path = string.sub(path, 2) end
     local rootName = obj:GetFullName():split(".")[1] or "Workspace"
     return "game:GetService(\"" .. rootName .. "\")" .. string.sub(path, string.len(rootName) + 1)
 end
 
-local function getObjectDataLines(obj)
-    local fullPath = obj:GetFullName()
-    local exactCodePath = getExactCodePath(obj)
-
+function MiniDex.GetObjectDataLines(obj)
     local lines = {
         "Target: " .. obj.Name,
         "Class: " .. obj.ClassName,
-        "Path: " .. fullPath,
-        "CodePath: " .. exactCodePath,
+        "Path: " .. obj:GetFullName(),
+        "CodePath: " .. MiniDex.GetExactCodePath(obj),
         "------------------------------"
     }
 
@@ -422,9 +239,6 @@ local function getObjectDataLines(obj)
                 strVal = string.format("Vector3.new(%.4f, %.4f, %.4f)", val.X, val.Y, val.Z)
             elseif typeof(val) == "Color3" then
                 strVal = string.format("Color3.fromRGB(%d, %d, %d)", math.floor(val.R*255), math.floor(val.G*255), math.floor(val.B*255))
-            elseif typeof(val) == "CFrame" then
-                local p = val.Position
-                strVal = string.format("CFrame.new(%.2f, %.2f, %.2f)", p.X, p.Y, p.Z)
             elseif typeof(val) == "Instance" then
                 strVal = val:GetFullName()
             end
@@ -449,20 +263,14 @@ local function getObjectDataLines(obj)
 end
 
 local function loadProperties(obj)
-    selectedObject = obj
-    lastCopiedData = ""
-    
+    MiniDex.SelectedObject = obj
     for _, child in ipairs(propScroll:GetChildren()) do
         if not child:IsA("UIListLayout") then child:Destroy() end
     end
-
     if not obj then return end
 
-    local textLines = getObjectDataLines(obj)
-
-    local count = 0
+    local textLines = MiniDex.GetObjectDataLines(obj)
     for _, line in ipairs(textLines) do
-        count = count + 1
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 0, 15)
         label.BackgroundTransparency = 1
@@ -473,67 +281,21 @@ local function loadProperties(obj)
         label.Text = " " .. line
         label.Parent = propScroll
     end
-
-    lastCopiedData = table.concat(textLines, "\n")
-    propScroll.CanvasSize = UDim2.new(0, 0, 0, count * 15)
+    propScroll.CanvasSize = UDim2.new(0, 0, 0, #textLines * 15)
 end
 
-local function isFuzzyMatch(instance, query)
-    if query == "" then return true end
-    local q = string.lower(query)
-    
-    if string.find(string.lower(instance.Name), q, 1, true) then return true end
-    if string.find(string.lower(instance.ClassName), q, 1, true) then return true end
-    if string.find(string.lower(instance:GetFullName()), q, 1, true) then return true end
-
-    local attrSuccess, attrs = pcall(function() return instance:GetAttributes() end)
-    if attrSuccess and attrs then
-        for attrName, attrVal in pairs(attrs) do
-            if string.find(string.lower(attrName), q, 1, true) or string.find(string.lower(tostring(attrVal)), q, 1, true) then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
-local renderDirectory
-
-local function getMatchingDescendants(parent, query)
-    local matches = {}
-    local function traverse(target)
-        for _, child in ipairs(target:GetChildren()) do
-            if isFuzzyMatch(child, query) then
-                table.insert(matches, child)
-            end
-            traverse(child)
-        end
-    end
-    traverse(parent)
-    return matches
-end
-
-function renderDirectory(target)
-    currentParent = target
+function MiniDex.RenderDirectory(target)
+    MiniDex.CurrentParent = target
     pathLabel.Text = " " .. target:GetFullName()
 
     for _, v in ipairs(explorerScroll:GetChildren()) do
         if not v:IsA("UIListLayout") then v:Destroy() end
     end
 
-    local filteredChildren = {}
-    local isSearchMode = activeFilter ~= ""
+    local children = target:GetChildren()
+    explorerScroll.CanvasSize = UDim2.new(0, 0, 0, #children * 20)
 
-    if isSearchMode then
-        filteredChildren = getMatchingDescendants(target, activeFilter)
-    else
-        filteredChildren = target:GetChildren()
-    end
-
-    explorerScroll.CanvasSize = UDim2.new(0, 0, 0, #filteredChildren * 20)
-
-    for i, child in ipairs(filteredChildren) do
+    for i, child in ipairs(children) do
         local itemFrame = Instance.new("Frame")
         itemFrame.Size = UDim2.new(1, 0, 0, 20)
         itemFrame.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(22, 22, 22)
@@ -541,10 +303,8 @@ function renderDirectory(target)
         itemFrame.Parent = explorerScroll
 
         local hasChildren = #child:GetChildren() > 0
-
         local expandBtn = Instance.new("TextButton")
         expandBtn.Size = UDim2.new(0, 24, 1, 0)
-        expandBtn.Position = UDim2.new(0, 0, 0, 0)
         expandBtn.BackgroundTransparency = 1
         expandBtn.Text = hasChildren and "[+]" or "  "
         expandBtn.TextColor3 = Color3.fromRGB(255, 180, 50)
@@ -553,18 +313,14 @@ function renderDirectory(target)
         expandBtn.Parent = itemFrame
 
         expandBtn.MouseButton1Click:Connect(function()
-            if hasChildren then 
-                searchBox.Text = ""
-                activeFilter = ""
-                renderDirectory(child) 
-            end
+            if hasChildren then MiniDex.RenderDirectory(child) end
         end)
 
         local selectBtn = Instance.new("TextButton")
         selectBtn.Size = UDim2.new(1, -24, 1, 0)
         selectBtn.Position = UDim2.new(0, 24, 0, 0)
         selectBtn.BackgroundTransparency = 1
-        selectBtn.Text = isSearchMode and string.format("%s (%s) -- %s", child.Name, child.ClassName, child:GetFullName()) or string.format("%s (%s)", child.Name, child.ClassName)
+        selectBtn.Text = string.format("%s (%s)", child.Name, child.ClassName)
         selectBtn.TextColor3 = getClassColor(child)
         selectBtn.TextSize = 9
         selectBtn.Font = Enum.Font.SourceSans
@@ -578,90 +334,349 @@ function renderDirectory(target)
     end
 end
 
+-- Modular Registration Function for Parts 2, 3, 4...
+_G.MiniDex_AddFolders = function(folderTable)
+    for name, inst in pairs(folderTable) do
+        if inst and not MiniDex.RegisteredFolders[name] then
+            MiniDex.RegisteredFolders[name] = inst
+            
+            local sBtn = Instance.new("TextButton")
+            sBtn.Size = UDim2.new(0, 75, 1, 0)
+            sBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            sBtn.BorderSizePixel = 0
+            sBtn.Text = name
+            sBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            sBtn.TextSize = 9
+            sBtn.Font = Enum.Font.SourceSansBold
+            sBtn.Parent = folderScroll
+
+            sBtn.MouseButton1Click:Connect(function()
+                MiniDex.RenderDirectory(inst)
+            end)
+        end
+    end
+    
+    local count = 0
+    for _ in pairs(MiniDex.RegisteredFolders) do count = count + 1 end
+    folderScroll.CanvasSize = UDim2.new(0, count * 79, 0, 0)
+end
+
+-- Button Listeners
 backBtn.MouseButton1Click:Connect(function()
-    if currentParent and currentParent.Parent and currentParent ~= game then
-        searchBox.Text = ""
-        activeFilter = ""
-        renderDirectory(currentParent.Parent)
+    if MiniDex.CurrentParent and MiniDex.CurrentParent.Parent and MiniDex.CurrentParent ~= game then
+        MiniDex.RenderDirectory(MiniDex.CurrentParent.Parent)
     end
 end)
-
-searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-    activeFilter = searchBox.Text
-    renderDirectory(currentParent)
-end)
-
-local serviceCount = 0
-for sName, sInstance in pairs(services) do
-    serviceCount = serviceCount + 1
-    local sBtn = Instance.new("TextButton")
-    sBtn.Size = UDim2.new(0, 80, 1, 0)
-    sBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    sBtn.BorderSizePixel = 0
-    sBtn.Text = sName
-    sBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    sBtn.TextSize = 9
-    sBtn.Font = Enum.Font.SourceSansBold
-    sBtn.Parent = serviceScroll
-
-    sBtn.MouseButton1Click:Connect(function()
-        searchBox.Text = ""
-        activeFilter = ""
-        renderDirectory(sInstance)
-    end)
-end
-serviceScroll.CanvasSize = UDim2.new(0, serviceCount * 82, 0, 0)
 
 copyPathBtn.MouseButton1Click:Connect(function()
-    if selectedObject and setclipboard then
-        local codePath = getExactCodePath(selectedObject)
-        setclipboard(codePath)
+    if MiniDex.SelectedObject and setclipboard then
+        setclipboard(MiniDex.GetExactCodePath(MiniDex.SelectedObject))
         copyPathBtn.Text = "Copied!"
-        copyPathBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-        task.delay(1.2, function()
-            copyPathBtn.Text = "Copy Path"
-            copyPathBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 180)
-        end)
+        task.delay(1, function() copyPathBtn.Text = "Copy Path" end)
     end
 end)
 
-copyBtn.MouseButton1Click:Connect(function()
-    if lastCopiedData ~= "" and setclipboard then
-        setclipboard(lastCopiedData)
-        copyBtn.Text = "Copied!"
-        copyBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-        task.delay(1.2, function()
-            copyBtn.Text = "Copy Props"
-            copyBtn.BackgroundColor3 = Color3.fromRGB(40, 130, 200)
-        end)
+copyPropsBtn.MouseButton1Click:Connect(function()
+    if MiniDex.SelectedObject and setclipboard then
+        local data = table.concat(MiniDex.GetObjectDataLines(MiniDex.SelectedObject), "\n")
+        setclipboard(data)
+        copyPropsBtn.Text = "Copied!"
+        task.delay(1, function() copyPropsBtn.Text = "Copy Props" end)
     end
 end)
 
+-- Non-Crashing Frame-Yielding Copy All
 copyAllBtn.MouseButton1Click:Connect(function()
-    if selectedObject and setclipboard then
-        local allLines = {}
-        
-        local mainData = getObjectDataLines(selectedObject)
-        for _, line in ipairs(mainData) do table.insert(allLines, line) end
-        table.insert(allLines, "\n==============================\n")
+    if MiniDex.SelectedObject and setclipboard then
+        copyAllBtn.Text = "Exporting..."
+        task.spawn(function()
+            local allLines = {}
+            local mainData = MiniDex.GetObjectDataLines(MiniDex.SelectedObject)
+            for _, line in ipairs(mainData) do table.insert(allLines, line) end
+            table.insert(allLines, "\n==============================\n")
 
-        local descendants = selectedObject:GetDescendants()
-        for _, desc in ipairs(descendants) do
-            local descData = getObjectDataLines(desc)
-            for _, line in ipairs(descData) do table.insert(allLines, line) end
-            table.insert(allLines, "\n------------------------------\n")
-        end
+            local descendants = MiniDex.SelectedObject:GetDescendants()
+            for i, desc in ipairs(descendants) do
+                local descData = MiniDex.GetObjectDataLines(desc)
+                for _, line in ipairs(descData) do table.insert(allLines, line) end
+                table.insert(allLines, "\n------------------------------\n")
+                
+                -- Yield every 20 items to prevent game freezing/crashing
+                if i % 20 == 0 then task.wait() end
+            end
 
-        local fullString = table.concat(allLines, "\n")
-        setclipboard(fullString)
-
-        copyAllBtn.Text = "Copied All!"
-        copyAllBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-        task.delay(1.2, function()
-            copyAllBtn.Text = "Copy All"
-            copyAllBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 40)
+            setclipboard(table.concat(allLines, "\n"))
+            copyAllBtn.Text = "Copied All!"
+            task.delay(1.2, function() copyAllBtn.Text = "Copy All" end)
         end)
     end
 end)
 
-renderDirectory(Workspace)
+-- Register Default Core Folders
+_G.MiniDex_AddFolders({
+    Workspace = game:GetService("Workspace"),
+    Lighting = game:GetService("Lighting"),
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    Players = game:GetService("Players")
+})
+
+MiniDex.RenderDirectory(game:GetService("Workspace"))
+-- ==========================================================
+-- MINI DEX EXPLORER - PART 2: CORE SERVICES & STORAGE EXPANSER
+-- ==========================================================
+
+if not _G.MiniDex_AddFolders then
+    warn("[Mini Dex]: Core framework (Part 1) must be executed before adding folder extensions!")
+    return
+end
+
+-- Safely resolve existing services or fallback tonil
+local function getServiceSafely(serviceName)
+    local success, service = pcall(function()
+        return game:GetService(serviceName)
+    end)
+    return success and service or nil
+end
+
+-- Indexing Primary Engine & Replicated Containers
+local PrimaryContainers = {
+    -- Storage & Replication Services
+    ["ServerStorage"] = getServiceSafely("ServerStorage"),
+    ["ServerScriptService"] = getServiceSafely("ServerScriptService"),
+    ["StarterGui"] = getServiceSafely("StarterGui"),
+    ["StarterPack"] = getServiceSafely("StarterPack"),
+    ["StarterPlayer"] = getServiceSafely("StarterPlayer"),
+    ["StarterPlayerScripts"] = getServiceSafely("StarterPlayer") and game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts"),
+    ["StarterCharacterScripts"] = getServiceSafely("StarterPlayer") and game:GetService("StarterPlayer"):FindFirstChild("StarterCharacterScripts"),
+    
+    -- Audio & Media Services
+    ["SoundService"] = getServiceSafely("SoundService"),
+    ["VoiceChatService"] = getServiceSafely("VoiceChatService"),
+    
+    -- Material, Lighting & Render Environments
+    ["MaterialService"] = getServiceSafely("MaterialService"),
+    ["TextChatService"] = getServiceSafely("TextChatService"),
+    
+    -- Mechanics, Physics & Gameplay Systems
+    ["Teams"] = getServiceSafely("Teams"),
+    ["PhysicsService"] = getServiceSafely("PhysicsService"),
+    ["PathfindingService"] = getServiceSafely("PathfindingService"),
+    ["ProximityPromptService"] = getServiceSafely("ProximityPromptService"),
+    ["TweenService"] = getServiceSafely("TweenService"),
+    ["CollectionService"] = getServiceSafely("CollectionService"),
+    
+    -- User Input & Core Player Interfaces
+    ["UserInputService"] = getServiceSafely("UserInputService"),
+    ["GuiService"] = getServiceSafely("GuiService"),
+    ["ContextActionService"] = getServiceSafely("ContextActionService"),
+    ["TeleportService"] = getServiceSafely("TeleportService"),
+    ["HttpService"] = getServiceSafely("HttpService"),
+    
+    -- Debris & Instance Garbage Containers
+    ["Debris"] = getServiceSafely("Debris"),
+    ["JointsService"] = getServiceSafely("JointsService")
+}
+
+-- Specific Sub-Container Targeting for G&B / Standard Combat Mechanics
+pcall(function()
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+    
+    -- Replicated Storage Combat & Event Sub-Folders
+    if replicatedStorage:FindFirstChild("Remotes") then
+        PrimaryContainers["RS_Remotes"] = replicatedStorage.Remotes
+    end
+    if replicatedStorage:FindFirstChild("Events") then
+        PrimaryContainers["RS_Events"] = replicatedStorage.Events
+    end
+    if replicatedStorage:FindFirstChild("VFX") or replicatedStorage:FindFirstChild("Effects") then
+        PrimaryContainers["RS_VFX"] = replicatedStorage:FindFirstChild("VFX") or replicatedStorage:FindFirstChild("Effects")
+    end
+    if replicatedStorage:FindFirstChild("Modules") then
+        PrimaryContainers["RS_Modules"] = replicatedStorage.Modules
+    end
+    if replicatedStorage:FindFirstChild("Assets") then
+        PrimaryContainers["RS_Assets"] = replicatedStorage.Assets
+    end
+    if replicatedStorage:FindFirstChild("Items") or replicatedStorage:FindFirstChild("Weapons") then
+        PrimaryContainers["RS_Weapons"] = replicatedStorage:FindFirstChild("Items") or replicatedStorage:FindFirstChild("Weapons")
+    end
+    
+    -- Local Player Backpack & Character Quick Access
+    local localPlayer = game:GetService("Players").LocalPlayer
+    if localPlayer then
+        if localPlayer:FindFirstChild("Backpack") then
+            PrimaryContainers["My_Backpack"] = localPlayer.Backpack
+        end
+        if localPlayer:FindFirstChild("PlayerGui") then
+            PrimaryContainers["My_PlayerGui"] = localPlayer.PlayerGui
+        end
+        if localPlayer.Character then
+            PrimaryContainers["My_Character"] = localPlayer.Character
+        end
+    end
+end)
+
+-- Register the targeted containers into the Mini Dex UI
+_G.MiniDex_AddFolders(PrimaryContainers)
+-- ==========================================================
+-- MINI DEX EXPLORER - PART 3: GAMEPLAY, MAP & ENTITY EXPANSER
+-- ==========================================================
+
+if not _G.MiniDex_AddFolders then
+    warn("[Mini Dex]: Core framework (Part 1) must be executed before adding folder extensions!")
+    return
+end
+
+local workspace = game:GetService("Workspace")
+local lighting = game:GetService("Lighting")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local players = game:GetService("Players")
+
+local DynamicContainers = {
+    ["Camera"] = workspace.CurrentCamera,
+    ["Terrain"] = workspace:FindFirstChildOfClass("Terrain"),
+}
+
+-- Target specific dynamic gameplay folders in Workspace
+pcall(function()
+    if workspace:FindFirstChild("Zombies") then
+        DynamicContainers["Zombies"] = workspace.Zombies
+    end
+    if workspace:FindFirstChild("Ragdolls") then
+        DynamicContainers["Ragdolls"] = workspace.Ragdolls
+    end
+    if workspace:FindFirstChild("Players") then
+        DynamicContainers["PlayersFolder"] = workspace.Players
+    end
+    if workspace:FindFirstChild("Map") then
+        DynamicContainers["Map"] = workspace.Map
+    end
+    if workspace:FindFirstChild("Environment") or workspace:FindFirstChild("Env") then
+        DynamicContainers["Environment"] = workspace:FindFirstChild("Environment") or workspace:FindFirstChild("Env")
+    end
+    if workspace:FindFirstChild("Buildings") then
+        DynamicContainers["Buildings"] = workspace.Buildings
+    end
+    if workspace:FindFirstChild("Debris") then
+        DynamicContainers["DebrisFolder"] = workspace.Debris
+    end
+    if workspace:FindFirstChild("Spawns") or workspace:FindFirstChild("SpawnLocations") then
+        DynamicContainers["Spawns"] = workspace:FindFirstChild("Spawns") or workspace:FindFirstChild("SpawnLocations")
+    end
+    if workspace:FindFirstChild("Barricades") or workspace:FindFirstChild("Structures") then
+        DynamicContainers["Structures"] = workspace:FindFirstChild("Barricades") or workspace:FindFirstChild("Structures")
+    end
+    if workspace:FindFirstChild("Cannons") or workspace:FindFirstChild("Artillery") then
+        DynamicContainers["Artillery"] = workspace:FindFirstChild("Cannons") or workspace:FindFirstChild("Artillery")
+    end
+    if workspace:FindFirstChild("Items") or workspace:FindFirstChild("Drops") then
+        DynamicContainers["WorldItems"] = workspace:FindFirstChild("Items") or workspace:FindFirstChild("Drops")
+    end
+end)
+
+-- Target atmospheric, lighting, and visual effect containers
+pcall(function()
+    if lighting:FindFirstChildOfClass("Atmosphere") then
+        DynamicContainers["Atmosphere"] = lighting:FindFirstChildOfClass("Atmosphere")
+    end
+    if lighting:FindFirstChildOfClass("Sky") then
+        DynamicContainers["Sky"] = lighting:FindFirstChildOfClass("Sky")
+    end
+    if lighting:FindFirstChildOfClass("Bloom") then
+        DynamicContainers["Bloom"] = lighting:FindFirstChildOfClass("Bloom")
+    end
+    if lighting:FindFirstChildOfClass("ColorCorrectionEffect") then
+        DynamicContainers["ColorCorrection"] = lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+    end
+    if lighting:FindFirstChildOfClass("SunRaysEffect") then
+        DynamicContainers["SunRays"] = lighting:FindFirstChildOfClass("SunRaysEffect")
+    end
+    if lighting:FindFirstChildOfClass("DepthOfFieldEffect") then
+        DynamicContainers["DepthOfField"] = lighting:FindFirstChildOfClass("DepthOfFieldEffect")
+    end
+end)
+
+-- Target network and interface sub-trees
+pcall(function()
+    if replicatedStorage:FindFirstChild("Remotes") then
+        local remotes = replicatedStorage.Remotes
+        if remotes:FindFirstChild("Gameplay") then
+            DynamicContainers["Remotes_Gameplay"] = remotes.Gameplay
+        end
+        if remotes:FindFirstChild("Combat") then
+            DynamicContainers["Remotes_Combat"] = remotes.Combat
+        end
+    end
+    
+    if replicatedStorage:FindFirstChild("Animations") or replicatedStorage:FindFirstChild("Anims") then
+        DynamicContainers["Animations"] = replicatedStorage:FindFirstChild("Animations") or replicatedStorage:FindFirstChild("Anims")
+    end
+    
+    if replicatedStorage:FindFirstChild("Sounds") or replicatedStorage:FindFirstChild("Audio") then
+        DynamicContainers["GameAudio"] = replicatedStorage:FindFirstChild("Sounds") or replicatedStorage:FindFirstChild("Audio")
+    end
+end)
+
+-- Register all populated gameplay & map containers to the Mini Dex top bar
+_G.MiniDex_AddFolders(DynamicContainers)
+-- ==========================================================
+-- MINI DEX EXPLORER - PART 4: RESIDUAL & DEEP ENVIRONMENT EXPANSER
+-- ==========================================================
+
+if not _G.MiniDex_AddFolders then
+    warn("[Mini Dex]: Core framework (Part 1) must be executed before adding folder extensions!")
+    return
+end
+
+local workspace = game:GetService("Workspace")
+local lighting = game:GetService("Lighting")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local guiService = game:GetService("GuiService")
+local coreGui = game:GetService("CoreGui")
+
+local DeepContainers = {}
+
+-- Index deep lighting & post-processing instances
+pcall(function()
+    for _, item in ipairs(lighting:GetChildren()) do
+        if item:IsA("PostEffect") or item:IsA("Atmosphere") or item:IsA("Sky") or item:IsA("Clouds") then
+            DeepContainers["Light_" .. item.ClassName] = item
+        end
+    end
+end)
+
+-- Index camera-attached runtime instances (ClientRef, local effects)
+pcall(function()
+    local cam = workspace.CurrentCamera
+    if cam then
+        for _, child in ipairs(cam:GetChildren()) do
+            DeepContainers["Cam_" .. child.Name] = child
+        end
+    end
+end)
+
+-- Index ReplicatedStorage residual sub-trees
+pcall(function()
+    if replicatedStorage:FindFirstChild("Packages") then
+        DeepContainers["RS_Packages"] = replicatedStorage.Packages
+    end
+    if replicatedStorage:FindFirstChild("Configs") or replicatedStorage:FindFirstChild("Configuration") then
+        DeepContainers["RS_Configs"] = replicatedStorage:FindFirstChild("Configs") or replicatedStorage:FindFirstChild("Configuration")
+    end
+    if replicatedStorage:FindFirstChild("GUI") or replicatedStorage:FindFirstChild("UI") then
+        DeepContainers["RS_UI"] = replicatedStorage:FindFirstChild("GUI") or replicatedStorage:FindFirstChild("UI")
+    end
+end)
+
+-- Index specific Workspace debris, dynamic parts, and runtime instances
+pcall(function()
+    if workspace:FindFirstChild("Effects") or workspace:FindFirstChild("Particles") then
+        DeepContainers["World_VFX"] = workspace:FindFirstChild("Effects") or workspace:FindFirstChild("Particles")
+    end
+    if workspace:FindFirstChild("Ignore") or workspace:FindFirstChild("RaycastIgnore") then
+        DeepContainers["RaycastIgnore"] = workspace:FindFirstChild("Ignore") or workspace:FindFirstChild("RaycastIgnore")
+    end
+end)
+
+-- Register remaining deep target containers to Mini Dex
+_G.MiniDex_AddFolders(DeepContainers)
