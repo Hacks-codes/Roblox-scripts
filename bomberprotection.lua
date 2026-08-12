@@ -1,3 +1,4 @@
+-- Services (Safe Executor Injection)
 local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
@@ -11,12 +12,32 @@ local Workspace = getService("Workspace")
 
 local lp = Players.LocalPlayer
 
+-- Feature States
+local states = {
+    bomberAim = false,
+    separateBtnVisible = false,
+    bomberEsp = false,
+    blastRadius = false,
+    autoRepel = false
+}
+
+-- Visual Tracking Caches
+local activeEspBoxes = {}
+local activeCircles = {}
+
+-- Shared Raycast Parameters (Zero Memory Allocations per Frame)
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = RaycastFilterType.Exclude
+raycastParams.IgnoreWater = true
+local filterTable = table.create(2)
+
+-- Utility Helpers
 local function getRandomName()
-    local str = ""
+    local bytes = {}
     for i = 1, math.random(8, 14) do
-        str = str .. string.char(math.random(97, 122))
+        bytes[i] = math.random(97, 122)
     end
-    return str
+    return string.char(unpack(bytes))
 end
 
 local function getGuiParent()
@@ -26,13 +47,44 @@ local function getGuiParent()
     return lp:WaitForChild("PlayerGui")
 end
 
--- Screen Container
+-- Efficient Shared Dragging Engine
+local activeDrag = nil
+local function makeDraggable(guiObject, targetFrame)
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            activeDrag = {
+                target = targetFrame,
+                dragStart = input.Position,
+                startPos = targetFrame.Position
+            }
+        end
+    end)
+end
+
+UserInputService.InputChanged:Connect(function(input)
+    if activeDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - activeDrag.dragStart
+        activeDrag.target.Position = UDim2.new(
+            activeDrag.startPos.X.Scale, 
+            activeDrag.startPos.X.Offset + delta.X, 
+            activeDrag.startPos.Y.Scale, 
+            activeDrag.startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if activeDrag and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        activeDrag = nil
+    end
+end)
+
+-- Interface Initialization
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = getRandomName()
 screenGui.ResetOnSpawn = false
 screenGui.Parent = getGuiParent()
 
--- Main Panel
 local frame = Instance.new("Frame")
 frame.Name = getRandomName()
 frame.Size = UDim2.new(0, 190, 0, 194)
@@ -44,32 +96,6 @@ frame.Visible = false
 frame.Active = true
 frame.Parent = screenGui
 
--- Mobile Touch / Mouse Dragging Helper
-local function makeDraggable(guiObject, targetFrame)
-    local dragging, dragStart, startPos
-    guiObject.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = targetFrame.Position
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            targetFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-end
-
--- Header Bar
 local header = Instance.new("Frame")
 header.Size = UDim2.new(1, 0, 0, 22)
 header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -100,7 +126,6 @@ closeBtn.TextSize = 11
 closeBtn.Parent = header
 closeBtn.MouseButton1Click:Connect(function() frame.Visible = false end)
 
--- Menu Toggle Button
 local menuToggleBtn = Instance.new("TextButton")
 menuToggleBtn.Name = getRandomName()
 menuToggleBtn.Size = UDim2.new(0, 45, 0, 24)
@@ -114,11 +139,9 @@ menuToggleBtn.Font = Enum.Font.SourceSansBold
 menuToggleBtn.TextSize = 11
 menuToggleBtn.Active = true
 menuToggleBtn.Parent = screenGui
-
 makeDraggable(menuToggleBtn, menuToggleBtn)
 menuToggleBtn.MouseButton1Click:Connect(function() frame.Visible = not frame.Visible end)
 
--- Floating Quick Toggle Button for Bomber Aim
 local quickAimBtn = Instance.new("TextButton")
 quickAimBtn.Name = getRandomName()
 quickAimBtn.Size = UDim2.new(0, 65, 0, 24)
@@ -133,21 +156,7 @@ quickAimBtn.TextSize = 10
 quickAimBtn.Active = true
 quickAimBtn.Visible = false
 quickAimBtn.Parent = screenGui
-
 makeDraggable(quickAimBtn, quickAimBtn)
-
--- Feature States
-local states = {
-    bomberAim = false,
-    separateBtnVisible = false,
-    bomberEsp = false,
-    blastRadius = false,
-    autoRepel = false
-}
-
--- Visual Tracking Containers
-local activeEspBoxes = {}
-local activeCircles = {}
 
 local function createToggleBtn(text, pos, onClick)
     local btn = Instance.new("TextButton")
@@ -237,8 +246,91 @@ createToggleBtn("12 Stud Safe Repel: OFF", UDim2.new(0, 4, 0, 132), function(btn
     btn.TextColor3 = states.autoRepel and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
 end)
 
--- Unload Button
+-- Bomber Identification Algorithm
+local function isBomber(zombie)
+    if not zombie then return false end
+    local zType = tostring(zombie:GetAttribute("Type") or "")
+    if zType == "Barrel" or zType == "Igniter" or zType == "Bomber" then
+        return true
+    end
+
+    local zName = zombie.Name:lower()
+    if zName:find("barrel") or zName:find("bomber") or zName:find("igniter") then
+        return true
+    end
+
+    if zombie:FindFirstChild("Barrel") or zombie:FindFirstChild("Bomb") or zombie:FindFirstChild("Powder") or zombie:FindFirstChild("PowderBarrel") then
+        return true
+    end
+
+    return false
+end
+
+-- Line-of-Sight Check (Reuses Filter Instance)
+local function isVisible(origin, targetPos, zombie, char)
+    filterTable[1] = char
+    filterTable[2] = zombie
+    raycastParams.FilterDescendantsInstances = filterTable
+
+    local direction = targetPos - origin
+    local result = Workspace:Raycast(origin, direction, raycastParams)
+    
+    if result then
+        return result.Instance:IsDescendantOf(zombie)
+    end
+    return true
+end
+
+-- Target Acquisition Engine
+local function getNearestVisibleBomber(hrp, char, currentBombers)
+    local closestHead = nil
+    local shortestDist = math.huge
+    local eyePos = hrp.Position + Vector3.new(0, 1.5, 0)
+
+    for zombie in pairs(currentBombers) do
+        local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
+        if zHead then
+            local dist = (hrp.Position - zHead.Position).Magnitude
+            if dist < shortestDist then
+                if isVisible(eyePos, zHead.Position, zombie, char) then
+                    shortestDist = dist
+                    closestHead = zHead
+                end
+            end
+        end
+    end
+
+    return closestHead
+end
+
+-- Raycast-Validated Position Enforcement
+local function getSafeEnforcedPosition(char, hrp, targetPos, zombiesFolder)
+    filterTable[1] = char
+    filterTable[2] = zombiesFolder
+    raycastParams.FilterDescendantsInstances = filterTable
+
+    local moveDir = targetPos - hrp.Position
+    local distance = moveDir.Magnitude
+
+    if distance < 0.01 then return hrp.Position end
+
+    local wallResult = Workspace:Raycast(hrp.Position, moveDir, raycastParams)
+    local safePos = targetPos
+    if wallResult then
+        safePos = wallResult.Position - (moveDir.Unit * 0.8)
+    end
+
+    local floorResult = Workspace:Raycast(safePos + Vector3.new(0, 2, 0), Vector3.new(0, -12, 0), raycastParams)
+    if floorResult then
+        return Vector3.new(safePos.X, floorResult.Position.Y + (hrp.Size.Y / 2) + 0.1, safePos.Z)
+    end
+
+    return nil
+end
+
+-- RenderStepped Main Loop
 local mainLoopConnection
+
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
 disableBtn.Size = UDim2.new(1, -8, 0, 22)
@@ -267,107 +359,21 @@ disableBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Bomber Identification Algorithm
-local function isBomber(zombie)
-    if not zombie then return false end
-    local zType = tostring(zombie:GetAttribute("Type") or "")
-    local zName = zombie.Name:lower()
-
-    if zType == "Barrel" or zType == "Bomber" or zType == "Igniter" or zName:find("barrel") or zName:find("bomber") or zName:find("igniter") then
-        return true
-    end
-
-    if zombie:FindFirstChild("Barrel") or zombie:FindFirstChild("Bomb") or zombie:FindFirstChild("Powder") or zombie:FindFirstChild("PowderBarrel") then
-        return true
-    end
-
-    return false
-end
-
--- Robust Line-of-Sight Check (Considers Map Geometry)
-local function isVisible(origin, targetPos, zombie, char)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {char, zombie}
-    raycastParams.IgnoreWater = true
-
-    local direction = targetPos - origin
-    local result = Workspace:Raycast(origin, direction, raycastParams)
-    
-    if result then
-        return result.Instance:IsDescendantOf(zombie)
-    end
-    return true
-end
-
--- Target Finder with Raycasting Check
-local function getNearestVisibleBomber(hrp, char)
-    local zombiesFolder = Workspace:FindFirstChild("Zombies")
-    if not zombiesFolder then return nil end
-
-    local closestHead = nil
-    local shortestDist = math.huge
-
-    for _, zombie in ipairs(zombiesFolder:GetChildren()) do
-        if isBomber(zombie) and zombie.Parent then
-            local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
-            if zHead then
-                local dist = (hrp.Position - zHead.Position).Magnitude
-                if dist < shortestDist then
-                    if isVisible(hrp.Position + Vector3.new(0, 1.5, 0), zHead.Position, zombie, char) then
-                        shortestDist = dist
-                        closestHead = zHead
-                    end
-                end
-            end
-        end
-    end
-
-    return closestHead
-end
-
--- Raycast-Validated Position Enforcement (Prevents wall clipping & floor voids)
-local function getSafeEnforcedPosition(char, hrp, targetPos)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {char, Workspace:FindFirstChild("Zombies")}
-    raycastParams.IgnoreWater = true
-
-    local moveDir = targetPos - hrp.Position
-    local distance = moveDir.Magnitude
-
-    if distance < 0.01 then return hrp.Position end
-
-    -- Check path for physical barriers
-    local wallResult = Workspace:Raycast(hrp.Position, moveDir, raycastParams)
-    local safePos = targetPos
-    if wallResult then
-        safePos = wallResult.Position - (moveDir.Unit * 0.8)
-    end
-
-    -- Verify solid ground under enforced coordinate
-    local floorResult = Workspace:Raycast(safePos + Vector3.new(0, 2, 0), Vector3.new(0, -12, 0), raycastParams)
-    if floorResult then
-        return Vector3.new(safePos.X, floorResult.Position.Y + (hrp.Size.Y / 2) + 0.1, safePos.Z)
-    end
-
-    return nil
-end
-
--- RenderStepped Main Loop
 mainLoopConnection = RunService.RenderStepped:Connect(function()
+    local zombiesFolder = Workspace:FindFirstChild("Zombies")
+    if not zombiesFolder then return end
+
     local char = lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local camera = Workspace.CurrentCamera
-    local zombiesFolder = Workspace:FindFirstChild("Zombies")
-
-    if not zombiesFolder then return end
 
     local currentBombers = {}
+    local children = zombiesFolder:GetChildren()
 
-    for _, zombie in ipairs(zombiesFolder:GetChildren()) do
-        if isBomber(zombie) and zombie.Parent then
+    for i = 1, #children do
+        local zombie = children[i]
+        if zombie.Parent and isBomber(zombie) then
             currentBombers[zombie] = true
 
             -- Selection Box ESP
@@ -406,7 +412,7 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Cleanup Dead Visuals
+    -- Cleanup Visual Cache
     for zombie, box in pairs(activeEspBoxes) do
         if not currentBombers[zombie] then
             if box and box.Parent then box:Destroy() end
@@ -426,7 +432,7 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
 
     if not hrp or not hum then return end
 
-    -- Strict 12-Stud Boundary Repulsion Engine
+    -- Repulsion Engine
     if states.autoRepel then
         for zombie in pairs(currentBombers) do
             local zHrp = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("Head")
@@ -441,7 +447,7 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
                     local targetFlatPos = flatZHrpPos + (pushDirection * 12)
                     local targetPos = Vector3.new(targetFlatPos.X, hrp.Position.Y, targetFlatPos.Z)
 
-                    local safePos = getSafeEnforcedPosition(char, hrp, targetPos)
+                    local safePos = getSafeEnforcedPosition(char, hrp, targetPos, zombiesFolder)
                     if safePos then
                         hrp.CFrame = CFrame.new(safePos) * hrp.CFrame.Rotation
                     end
@@ -450,9 +456,9 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Dedicated Bomber Aimlock Engine
+    -- Bomber Aimlock Engine
     if states.bomberAim then
-        local targetHead = getNearestVisibleBomber(hrp, char)
+        local targetHead = getNearestVisibleBomber(hrp, char, currentBombers)
         if targetHead then
             local headPos = targetHead.Position
             local isShiftLock = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
