@@ -1,3 +1,5 @@
+-- PART 1 OF 2
+
 local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
@@ -13,7 +15,7 @@ local lp = Players.LocalPlayer
 
 local function getRandomName()
     local str = ""
-    for i = 1, math.random(8, 14) do
+    for _ = 1, math.random(8, 14) do
         str = str .. string.char(math.random(97, 122))
     end
     return str
@@ -32,14 +34,13 @@ screenGui.Name = getRandomName()
 screenGui.ResetOnSpawn = false
 screenGui.Parent = getGuiParent()
 
--- Main Obsidian Frame
+-- Main Obsidian Frame (Height adjusted for extra controls)
 local frame = Instance.new("Frame")
 frame.Name = getRandomName()
-frame.Size = UDim2.new(0, 210, 0, 195)
-frame.Position = UDim2.new(0.5, -105, 0.4, -97)
+frame.Size = UDim2.new(0, 210, 0, 225)
+frame.Position = UDim2.new(0.5, -105, 0.4, -112)
 frame.BackgroundColor3 = Color3.fromRGB(15, 16, 20)
-frame.BorderSizePixel = 1
-frame.BorderColor3 = Color3.fromRGB(40, 42, 54)
+frame.BorderSizePixel = 0
 frame.Visible = false
 frame.Active = true
 frame.Parent = screenGui
@@ -162,7 +163,7 @@ local states = {
     aimlock = false,
     separateBtnVisible = false,
     smoothAim = false,
-    smoothness = 0.25,
+    smoothness = 0.20, -- Lower = Slower/Smoother turn speed (0.05 = Very slow, 1.0 = Instant)
     wallCheck = true
 }
 
@@ -183,6 +184,7 @@ local function createToggleBtn(text, pos, onClick)
     btn.MouseButton1Click:Connect(function() onClick(btn) end)
     return btn
 end
+-- PART 2 OF 2
 
 -- Synchronized Aim Toggle Function
 local mainAimBtn
@@ -227,7 +229,23 @@ createToggleBtn("Smooth Aim: OFF", UDim2.new(0, 6, 0, 88), function(btn)
     btn.TextColor3 = states.smoothAim and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
 end)
 
-createToggleBtn("Wall Check: ON", UDim2.new(0, 6, 0, 116), function(btn)
+-- Smooth Speed Adjuster Button (Toggles through preset turn speeds)
+local speedPresets = {
+    { speed = 0.05, label = "Slow" },
+    { speed = 0.15, label = "Medium" },
+    { speed = 0.35, label = "Fast" }
+}
+local currentSpeedIdx = 2
+
+local speedBtn = createToggleBtn("Smooth Speed: Medium", UDim2.new(0, 6, 0, 116), function(btn)
+    currentSpeedIdx = (currentSpeedIdx % #speedPresets) + 1
+    local preset = speedPresets[currentSpeedIdx]
+    states.smoothness = preset.speed
+    btn.Text = "Smooth Speed: " .. preset.label
+    btn.TextColor3 = Color3.fromRGB(139, 92, 246)
+end)
+
+createToggleBtn("Wall Check: ON", UDim2.new(0, 6, 0, 144), function(btn)
     states.wallCheck = not states.wallCheck
     btn.Text = "Wall Check: " .. (states.wallCheck and "ON" or "OFF")
     btn.TextColor3 = states.wallCheck and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
@@ -238,7 +256,7 @@ local mainLoopConnection
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
 disableBtn.Size = UDim2.new(1, -12, 0, 24)
-disableBtn.Position = UDim2.new(0, 6, 0, 150)
+disableBtn.Position = UDim2.new(0, 6, 0, 182)
 disableBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 25)
 disableBtn.BorderSizePixel = 0
 disableBtn.Text = "UNLOAD SCRIPT"
@@ -262,15 +280,16 @@ disableBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Wall Check Engine
+-- Reusable RaycastParams Instance (Optimized to avoid garbage collection spikes)
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = RaycastFilterType.Exclude
+raycastParams.IgnoreWater = true
+
+-- Wall Check Engine using Raycasting
 local function isVisible(origin, targetPos, zombie, char)
     if not states.wallCheck then return true end
 
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = RaycastFilterType.Exclude
     raycastParams.FilterDescendantsInstances = {char, zombie}
-    raycastParams.IgnoreWater = true
-
     local direction = targetPos - origin
     local result = Workspace:Raycast(origin, direction, raycastParams)
 
@@ -306,8 +325,8 @@ local function getNearestTarget(hrp, char)
     return closestHead
 end
 
--- RenderStepped Main Loop
-mainLoopConnection = RunService.RenderStepped:Connect(function()
+-- RenderStepped Main Loop (Frame-Rate Independent Lerping)
+mainLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
     local char = lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -321,26 +340,21 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
             local headPos = targetHead.Position
             local isShiftLock = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
 
+            -- Frame-rate independent lerp alpha adjustment
+            local lerpAlpha = states.smoothAim and math.clamp(states.smoothness * deltaTime * 60, 0.01, 1) or 1
+
             if isShiftLock then
                 hum.AutoRotate = true
                 if camera then
                     local targetCFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
-                    if states.smoothAim then
-                        camera.CFrame = camera.CFrame:Lerp(targetCFrame, states.smoothness)
-                    else
-                        camera.CFrame = targetCFrame
-                    end
+                    camera.CFrame = camera.CFrame:Lerp(targetCFrame, lerpAlpha)
                 end
             else
                 hum.AutoRotate = false
                 local lookAtPos = Vector3.new(headPos.X, hrp.Position.Y, headPos.Z)
                 if (lookAtPos - hrp.Position).Magnitude > 0.01 then
                     local targetCFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-                    if states.smoothAim then
-                        hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, states.smoothness)
-                    else
-                        hrp.CFrame = targetCFrame
-                    end
+                    hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, lerpAlpha)
                 end
             end
         else
@@ -348,3 +362,4 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
