@@ -1,4 +1,3 @@
--- Services (Safe Executor Injection handling)
 local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
@@ -12,7 +11,7 @@ local Workspace = getService("Workspace")
 
 local lp = Players.LocalPlayer
 
--- Global Script State Management
+-- Global State
 local states = {
     aimlock = false,
     separateBtnVisible = false,
@@ -21,13 +20,13 @@ local states = {
     wallCheck = true
 }
 
--- Utility Helpers
+-- Utility Functions
 local function getRandomName()
     local bytes = {}
     for i = 1, math.random(8, 14) do
         bytes[i] = math.random(97, 122)
     end
-    return string.char(unpack(bytes))
+    return string.char(table.unpack(bytes))
 end
 
 local function getGuiParent()
@@ -51,7 +50,7 @@ local function applyStroke(obj, color, thickness)
     stroke.Parent = obj
 end
 
--- Efficient Shared Dragging Handler (Single Event Connection)
+-- Universal Mobile & Desktop Dragging Handler
 local activeDrag = nil
 local function makeDraggable(guiObject, targetFrame)
     guiObject.InputBegan:Connect(function(input)
@@ -83,7 +82,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- UI Construction
+-- UI Setup
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = getRandomName()
 screenGui.ResetOnSpawn = false
@@ -188,7 +187,7 @@ local function createToggleBtn(text, pos, onClick)
     return btn
 end
 
--- Control Binding Variables
+-- Controls Integration
 local mainAimBtn
 
 local function setAimState(enabled)
@@ -253,19 +252,15 @@ createToggleBtn("Wall Check: ON", UDim2.new(0, 6, 0, 144), function(btn)
     btn.TextColor3 = states.wallCheck and Color3.fromRGB(139, 92, 246) or Color3.fromRGB(160, 165, 180)
 end)
 
--- Memory Optimization: Shared Raycasting Allocations
+-- Optimized Raycasting Engine
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = RaycastFilterType.Exclude
 raycastParams.IgnoreWater = true
-local filterTable = table.create(2)
 
 local function isVisible(origin, targetPos, zombie, char)
     if not states.wallCheck then return true end
 
-    filterTable[1] = char
-    filterTable[2] = zombie
-    raycastParams.FilterDescendantsInstances = filterTable
-
+    raycastParams.FilterDescendantsInstances = {char, zombie}
     local direction = targetPos - origin
     local result = Workspace:Raycast(origin, direction, raycastParams)
 
@@ -275,7 +270,7 @@ local function isVisible(origin, targetPos, zombie, char)
     return true
 end
 
--- Dynamic Targeting Engine
+-- Valid Target Acquisition System
 local function getNearestTarget(hrp, char)
     local zombiesFolder = Workspace:FindFirstChild("Zombies")
     if not zombiesFolder then return nil end
@@ -288,13 +283,17 @@ local function getNearestTarget(hrp, char)
 
     for i = 1, #children do
         local zombie = children[i]
-        local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
-        if zHead then
-            local dist = (hrpPos - zHead.Position).Magnitude
-            if dist < shortestDist then
-                if isVisible(eyePos, zHead.Position, zombie, char) then
-                    shortestDist = dist
-                    closestHead = zHead
+        local zHum = zombie:FindFirstChildOfClass("Humanoid")
+        -- Filter out dead or despawned zombies
+        if zombie.Parent and zHum and zHum.Health > 0 then
+            local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
+            if zHead then
+                local dist = (hrpPos - zHead.Position).Magnitude
+                if dist < shortestDist then
+                    if isVisible(eyePos, zHead.Position, zombie, char) then
+                        shortestDist = dist
+                        closestHead = zHead
+                    end
                 end
             end
         end
@@ -303,7 +302,7 @@ local function getNearestTarget(hrp, char)
     return closestHead
 end
 
--- Render Loop & Unload System
+-- Unload Button Initialization
 local mainLoopConnection
 
 local disableBtn = Instance.new("TextButton")
@@ -333,37 +332,38 @@ disableBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
+-- Main Aimlock Processing Loop
 mainLoopConnection = RunService.RenderStepped:Connect(function(deltaTime)
+    if not states.aimlock then return end
+
     local char = lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local camera = Workspace.CurrentCamera
 
-    if not hrp or not hum then return end
+    if not hrp or not hum or not camera then return end
 
-    if states.aimlock then
-        local targetHead = getNearestTarget(hrp, char)
-        if targetHead then
-            local headPos = targetHead.Position
-            local isShiftLock = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
-            local lerpAlpha = states.smoothAim and math.clamp(states.smoothness * deltaTime * 60, 0.01, 1) or 1
+    local targetHead = getNearestTarget(hrp, char)
+    if targetHead then
+        local headPos = targetHead.Position
+        local isShiftLock = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+        local lerpAlpha = states.smoothAim and math.clamp(states.smoothness * deltaTime * 60, 0.01, 1) or 1
 
-            if isShiftLock then
-                hum.AutoRotate = true
-                if camera then
-                    local targetCFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
-                    camera.CFrame = camera.CFrame:Lerp(targetCFrame, lerpAlpha)
-                end
-            else
-                hum.AutoRotate = false
-                local lookAtPos = Vector3.new(headPos.X, hrp.Position.Y, headPos.Z)
-                if (lookAtPos - hrp.Position).Magnitude > 0.01 then
-                    local targetCFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-                    hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, lerpAlpha)
-                end
-            end
-        else
+        if isShiftLock then
             hum.AutoRotate = true
+            local targetCFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
+            camera.CFrame = camera.CFrame:Lerp(targetCFrame, lerpAlpha)
+        else
+            hum.AutoRotate = false
+            local lookAtPos = Vector3.new(headPos.X, hrp.Position.Y, headPos.Z)
+            if (lookAtPos - hrp.Position).Magnitude > 0.01 then
+                local targetCFrame = CFrame.lookAt(hrp.Position, lookAtPos)
+                hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, lerpAlpha)
+            end
+            local targetCameraCFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
+            camera.CFrame = camera.CFrame:Lerp(targetCameraCFrame, lerpAlpha)
         end
+    else
+        hum.AutoRotate = true
     end
 end)
