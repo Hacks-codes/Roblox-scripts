@@ -1,4 +1,7 @@
--- Localize Services
+-- ==========================================
+-- MINI DEX EXPLORER - PART 1 / 2
+-- ==========================================
+
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -28,7 +31,6 @@ local function getSafeGuiParent()
     return lp:WaitForChild("PlayerGui")
 end
 
--- Comprehensive Class Color Palette
 local classColors = {
     Folder = Color3.fromRGB(240, 200, 80),
     Model = Color3.fromRGB(255, 170, 40),
@@ -84,7 +86,6 @@ local function getClassColor(instance)
     return defaultColor
 end
 
--- Service Map
 local services = {
     ["Workspace"] = Workspace,
     ["Players"] = Players,
@@ -112,13 +113,11 @@ for name, service in pairs(optionalServices) do
     if service then services[name] = service end
 end
 
--- ScreenGui Setup
 local gui = Instance.new("ScreenGui")
 gui.Name = "ExpandedWorkspaceExplorer"
 gui.ResetOnSpawn = false
 gui.Parent = getSafeGuiParent()
 
--- Main Frame Window
 local main = Instance.new("Frame")
 main.Name = "MainFrame"
 main.Size = UDim2.new(0, 320, 0, 420)
@@ -129,7 +128,6 @@ main.BorderColor3 = Color3.fromRGB(55, 55, 55)
 main.Active = true
 main.Parent = gui
 
--- Toggle Button
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "DexToggleBtn"
 toggleBtn.Size = UDim2.new(0, 48, 0, 26)
@@ -170,7 +168,6 @@ toggleBtn.MouseButton1Click:Connect(function()
     main.Visible = not main.Visible
 end)
 
--- Header Bar
 local header = Instance.new("TextLabel")
 header.Name = "Header"
 header.Size = UDim2.new(1, 0, 0, 24)
@@ -195,7 +192,6 @@ closeBtn.Font = Enum.Font.SourceSansBold
 closeBtn.Parent = header
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
 
--- Service Switcher Bar
 local serviceScroll = Instance.new("ScrollingFrame")
 serviceScroll.Name = "ServiceScroll"
 serviceScroll.Size = UDim2.new(1, -4, 0, 24)
@@ -211,7 +207,6 @@ serviceLayout.SortOrder = Enum.SortOrder.LayoutOrder
 serviceLayout.Padding = UDim.new(0, 2)
 serviceLayout.Parent = serviceScroll
 
--- Search Bar Frame
 local searchFrame = Instance.new("Frame")
 searchFrame.Size = UDim2.new(1, -4, 0, 22)
 searchFrame.Position = UDim2.new(0, 2, 0, 52)
@@ -241,7 +236,6 @@ searchBox.TextXAlignment = Enum.TextXAlignment.Left
 searchBox.ClearTextOnFocus = false
 searchBox.Parent = searchFrame
 
--- Navigation Setup
 local currentParent = Workspace
 local selectedObject = nil
 local lastCopiedData = ""
@@ -271,7 +265,6 @@ pathLabel.TextXAlignment = Enum.TextXAlignment.Left
 pathLabel.ClipsDescendants = true
 pathLabel.Parent = main
 
--- Explorer Scroll Area
 local explorerScroll = Instance.new("ScrollingFrame")
 explorerScroll.Name = "ExplorerScroll"
 explorerScroll.Size = UDim2.new(1, -4, 0, 150)
@@ -285,7 +278,6 @@ local explorerLayout = Instance.new("UIListLayout")
 explorerLayout.SortOrder = Enum.SortOrder.LayoutOrder
 explorerLayout.Parent = explorerScroll
 
--- Property Header
 local propHeaderFrame = Instance.new("Frame")
 propHeaderFrame.Size = UDim2.new(1, -4, 0, 20)
 propHeaderFrame.Position = UDim2.new(0, 2, 0, 250)
@@ -336,7 +328,6 @@ copyAllBtn.TextSize = 8
 copyAllBtn.Font = Enum.Font.SourceSansBold
 copyAllBtn.Parent = propHeaderFrame
 
--- Properties Scroll Area
 local propScroll = Instance.new("ScrollingFrame")
 propScroll.Name = "PropScroll"
 propScroll.Size = UDim2.new(1, -4, 0, 146)
@@ -349,8 +340,10 @@ propScroll.Parent = main
 local propLayout = Instance.new("UIListLayout")
 propLayout.SortOrder = Enum.SortOrder.LayoutOrder
 propLayout.Parent = propScroll
+-- ==========================================
+-- MINI DEX EXPLORER - PART 2 / 2
+-- ==========================================
 
--- Draggable Logic
 local dragging, dragStart, startPos
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -373,7 +366,6 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Extended Property Names
 local extendedProps = {
     "ClassName", "Parent", "Name", "Value", "ToolTip", "TextureId", "SoundId", "Volume", "Playing",
     "PrimaryPart", "Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight",
@@ -385,7 +377,6 @@ local extendedProps = {
     "Intensity", "Range", "Enabled", "Lifetime", "Rate", "Speed", "SpreadAngle"
 }
 
--- Exact Code Path Formatting
 local function getExactCodePath(obj)
     if not obj then return "" end
     local pathParts = {}
@@ -411,7 +402,6 @@ local function getExactCodePath(obj)
     return "game:GetService(\"" .. rootName .. "\")" .. string.sub(path, string.len(rootName) + 1)
 end
 
--- Safe Data Lines Extraction
 local function getObjectDataLines(obj)
     local fullPath = obj:GetFullName()
     local exactCodePath = getExactCodePath(obj)
@@ -458,7 +448,6 @@ local function getObjectDataLines(obj)
     return lines
 end
 
--- Properties UI Loading
 local function loadProperties(obj)
     selectedObject = obj
     lastCopiedData = ""
@@ -489,7 +478,6 @@ local function loadProperties(obj)
     propScroll.CanvasSize = UDim2.new(0, 0, 0, count * 15)
 end
 
--- Fuzzy Search Engine
 local function isFuzzyMatch(instance, query)
     if query == "" then return true end
     local q = string.lower(query)
@@ -526,7 +514,6 @@ local function getMatchingDescendants(parent, query)
     return matches
 end
 
--- Main Directory Renderer
 function renderDirectory(target)
     currentParent = target
     pathLabel.Text = " " .. target:GetFullName()
@@ -539,4 +526,142 @@ function renderDirectory(target)
     local isSearchMode = activeFilter ~= ""
 
     if isSearchMode then
-        filteredChildren = getMatchin
+        filteredChildren = getMatchingDescendants(target, activeFilter)
+    else
+        filteredChildren = target:GetChildren()
+    end
+
+    explorerScroll.CanvasSize = UDim2.new(0, 0, 0, #filteredChildren * 20)
+
+    for i, child in ipairs(filteredChildren) do
+        local itemFrame = Instance.new("Frame")
+        itemFrame.Size = UDim2.new(1, 0, 0, 20)
+        itemFrame.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(22, 22, 22)
+        itemFrame.BorderSizePixel = 0
+        itemFrame.Parent = explorerScroll
+
+        local hasChildren = #child:GetChildren() > 0
+
+        local expandBtn = Instance.new("TextButton")
+        expandBtn.Size = UDim2.new(0, 24, 1, 0)
+        expandBtn.Position = UDim2.new(0, 0, 0, 0)
+        expandBtn.BackgroundTransparency = 1
+        expandBtn.Text = hasChildren and "[+]" or "  "
+        expandBtn.TextColor3 = Color3.fromRGB(255, 180, 50)
+        expandBtn.TextSize = 9
+        expandBtn.Font = Enum.Font.SourceSansBold
+        expandBtn.Parent = itemFrame
+
+        expandBtn.MouseButton1Click:Connect(function()
+            if hasChildren then 
+                searchBox.Text = ""
+                activeFilter = ""
+                renderDirectory(child) 
+            end
+        end)
+
+        local selectBtn = Instance.new("TextButton")
+        selectBtn.Size = UDim2.new(1, -24, 1, 0)
+        selectBtn.Position = UDim2.new(0, 24, 0, 0)
+        selectBtn.BackgroundTransparency = 1
+        selectBtn.Text = isSearchMode and string.format("%s (%s) -- %s", child.Name, child.ClassName, child:GetFullName()) or string.format("%s (%s)", child.Name, child.ClassName)
+        selectBtn.TextColor3 = getClassColor(child)
+        selectBtn.TextSize = 9
+        selectBtn.Font = Enum.Font.SourceSans
+        selectBtn.TextXAlignment = Enum.TextXAlignment.Left
+        selectBtn.ClipsDescendants = true
+        selectBtn.Parent = itemFrame
+
+        selectBtn.MouseButton1Click:Connect(function()
+            loadProperties(child)
+        end)
+    end
+end
+
+backBtn.MouseButton1Click:Connect(function()
+    if currentParent and currentParent.Parent and currentParent ~= game then
+        searchBox.Text = ""
+        activeFilter = ""
+        renderDirectory(currentParent.Parent)
+    end
+end)
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    activeFilter = searchBox.Text
+    renderDirectory(currentParent)
+end)
+
+local serviceCount = 0
+for sName, sInstance in pairs(services) do
+    serviceCount = serviceCount + 1
+    local sBtn = Instance.new("TextButton")
+    sBtn.Size = UDim2.new(0, 80, 1, 0)
+    sBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    sBtn.BorderSizePixel = 0
+    sBtn.Text = sName
+    sBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    sBtn.TextSize = 9
+    sBtn.Font = Enum.Font.SourceSansBold
+    sBtn.Parent = serviceScroll
+
+    sBtn.MouseButton1Click:Connect(function()
+        searchBox.Text = ""
+        activeFilter = ""
+        renderDirectory(sInstance)
+    end)
+end
+serviceScroll.CanvasSize = UDim2.new(0, serviceCount * 82, 0, 0)
+
+copyPathBtn.MouseButton1Click:Connect(function()
+    if selectedObject and setclipboard then
+        local codePath = getExactCodePath(selectedObject)
+        setclipboard(codePath)
+        copyPathBtn.Text = "Copied!"
+        copyPathBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        task.delay(1.2, function()
+            copyPathBtn.Text = "Copy Path"
+            copyPathBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 180)
+        end)
+    end
+end)
+
+copyBtn.MouseButton1Click:Connect(function()
+    if lastCopiedData ~= "" and setclipboard then
+        setclipboard(lastCopiedData)
+        copyBtn.Text = "Copied!"
+        copyBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        task.delay(1.2, function()
+            copyBtn.Text = "Copy Props"
+            copyBtn.BackgroundColor3 = Color3.fromRGB(40, 130, 200)
+        end)
+    end
+end)
+
+copyAllBtn.MouseButton1Click:Connect(function()
+    if selectedObject and setclipboard then
+        local allLines = {}
+        
+        local mainData = getObjectDataLines(selectedObject)
+        for _, line in ipairs(mainData) do table.insert(allLines, line) end
+        table.insert(allLines, "\n==============================\n")
+
+        local descendants = selectedObject:GetDescendants()
+        for _, desc in ipairs(descendants) do
+            local descData = getObjectDataLines(desc)
+            for _, line in ipairs(descData) do table.insert(allLines, line) end
+            table.insert(allLines, "\n------------------------------\n")
+        end
+
+        local fullString = table.concat(allLines, "\n")
+        setclipboard(fullString)
+
+        copyAllBtn.Text = "Copied All!"
+        copyAllBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        task.delay(1.2, function()
+            copyAllBtn.Text = "Copy All"
+            copyAllBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 40)
+        end)
+    end
+end)
+
+renderDirectory(Workspace)
