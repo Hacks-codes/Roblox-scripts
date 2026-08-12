@@ -1,4 +1,4 @@
-local function getService(name)
+Local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
 end
@@ -35,8 +35,8 @@ screenGui.Parent = getGuiParent()
 -- Main Panel
 local frame = Instance.new("Frame")
 frame.Name = getRandomName()
-frame.Size = UDim2.new(0, 190, 0, 272)
-frame.Position = UDim2.new(0.5, -95, 0.4, -136)
+frame.Size = UDim2.new(0, 190, 0, 194)
+frame.Position = UDim2.new(0.5, -95, 0.4, -97)
 frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 frame.BorderSizePixel = 1
 frame.BorderColor3 = Color3.fromRGB(60, 60, 60)
@@ -142,10 +142,7 @@ local states = {
     aimMode = "Body",
     separateBtnVisible = false,
     aimRange = 5,
-    unlockCam = false,
-    smoothAim = false,
-    smoothness = 0.2,
-    wallCheck = false
+    unlockCam = false
 }
 
 local function createToggleBtn(text, pos, onClick)
@@ -255,22 +252,8 @@ createToggleBtn("Aim Mode: Body", UDim2.new(0, 4, 0, 106), function(btn)
     if hum then hum.AutoRotate = true end
 end)
 
--- Smooth Aim Toggle
-createToggleBtn("Smooth Aim: OFF", UDim2.new(0, 4, 0, 132), function(btn)
-    states.smoothAim = not states.smoothAim
-    btn.Text = "Smooth Aim: " .. (states.smoothAim and "ON" or "OFF")
-    btn.TextColor3 = states.smoothAim and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
-end)
-
--- Wall Check Toggle
-createToggleBtn("Wall Check: OFF", UDim2.new(0, 4, 0, 158), function(btn)
-    states.wallCheck = not states.wallCheck
-    btn.Text = "Wall Check: " .. (states.wallCheck and "ON" or "OFF")
-    btn.TextColor3 = states.wallCheck and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
-end)
-
 -- Unlock Zoom
-createToggleBtn("Unlock Cam Zoom: OFF", UDim2.new(0, 4, 0, 184), function(btn)
+createToggleBtn("Unlock Cam Zoom: OFF", UDim2.new(0, 4, 0, 132), function(btn)
     states.unlockCam = not states.unlockCam
     btn.Text = "Unlock Cam Zoom: " .. (states.unlockCam and "ON" or "OFF")
     btn.TextColor3 = states.unlockCam and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
@@ -285,7 +268,7 @@ local mainLoopConnection
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
 disableBtn.Size = UDim2.new(1, -8, 0, 22)
-disableBtn.Position = UDim2.new(0, 4, 0, 210)
+disableBtn.Position = UDim2.new(0, 4, 0, 158)
 disableBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
 disableBtn.BorderSizePixel = 1
 disableBtn.BorderColor3 = Color3.fromRGB(100, 20, 20)
@@ -329,25 +312,6 @@ local function isBomber(zombie)
     return false
 end
 
--- Safe Raycast Wall Check Helper
-local function isVisible(origin, targetPos, ignoreList)
-    local ok, visible = pcall(function()
-        local direction = targetPos - origin
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = ignoreList or {}
-        params.IgnoreWater = true
-
-        local result = Workspace:Raycast(origin, direction, params)
-        return result == nil
-    end)
-
-    if ok then
-        return visible
-    end
-    return true -- Fallback to visible if raycast errors out so feature doesn't break main targeting
-end
-
 -- Dynamic Range Target Acquisition
 local function getTargetHead(hrp)
     local zombiesFolder = Workspace:FindFirstChild("Zombies")
@@ -355,7 +319,6 @@ local function getTargetHead(hrp)
 
     local closestHead = nil
     local shortestDist = states.aimRange
-    local char = lp.Character
 
     for _, zombie in ipairs(zombiesFolder:GetChildren()) do
         if not isBomber(zombie) then
@@ -363,17 +326,8 @@ local function getTargetHead(hrp)
             if zHead and zombie.Parent then
                 local dist = (hrp.Position - zHead.Position).Magnitude
                 if dist <= shortestDist then
-                    local canTarget = true
-
-                    if states.wallCheck then
-                        local ignoreList = {char, zombie}
-                        canTarget = isVisible(hrp.Position, zHead.Position, ignoreList)
-                    end
-
-                    if canTarget then
-                        shortestDist = dist
-                        closestHead = zHead
-                    end
+                    shortestDist = dist
+                    closestHead = zHead
                 end
             end
         end
@@ -408,22 +362,12 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
             hum.AutoRotate = false
             local lookAtPos = Vector3.new(headPos.X, hrp.Position.Y, headPos.Z)
             if (lookAtPos - hrp.Position).Magnitude > 0.01 then
-                local targetCFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-                if states.smoothAim then
-                    hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, states.smoothness)
-                else
-                    hrp.CFrame = targetCFrame
-                end
+                hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
             end
         elseif states.aimMode == "Camera" then
             hum.AutoRotate = true
             if camera then
-                local targetCFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
-                if states.smoothAim then
-                    camera.CFrame = camera.CFrame:Lerp(targetCFrame, states.smoothness)
-                else
-                    camera.CFrame = targetCFrame
-                end
+                camera.CFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
             end
         end
     else
