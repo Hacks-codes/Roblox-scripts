@@ -1,5 +1,5 @@
 -- ==========================================================
--- MINI DEX EXPLORER - PART 1: CORE FRAMEWORK (CHAR-LIMIT CHUNKING)
+-- MINI DEX EXPLORER - PART 1: CORE FRAMEWORK (AUTO-HIDE COPY ALL)
 -- ==========================================================
 
 local CoreGui = game:GetService("CoreGui")
@@ -9,7 +9,7 @@ local MiniDex = {
     CurrentParent = game:GetService("Workspace"),
     SelectedObject = nil,
     ActiveFilter = "",
-    MaxCharsPerChunk = 75000, -- Targets ~80% of Android clipboard text limits
+    MaxDescendantSafetyCap = 1200, -- Hide Copy All above this to prevent crashes
     RegisteredFolders = {}
 }
 
@@ -54,7 +54,7 @@ title.Font = Enum.Font.SourceSansBold
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
 
--- Top Right Control Cluster (Minimize / Close)
+-- Top Right Control Buttons (Minimize / Close)
 local minBtn = Instance.new("TextButton")
 minBtn.Size = UDim2.new(0, 22, 0, 18)
 minBtn.Position = UDim2.new(1, -48, 0, 3)
@@ -80,7 +80,7 @@ closeBtn.Parent = header
 -- Floating Open Toggle Button (Visible when minimized)
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "MiniDexToggle"
-toggleBtn.Size = UDim2.new(0, 65, 0, 24)
+toggleBtn.Size = UDim2.new(0, 55, 0, 24)
 toggleBtn.Position = UDim2.new(0, 10, 0.4, 0)
 toggleBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 toggleBtn.BorderSizePixel = 1
@@ -215,48 +215,28 @@ actionContainer.Position = UDim2.new(0, 5, 1, -28)
 actionContainer.BackgroundTransparency = 1
 actionContainer.Parent = main
 
-local chunkScroll = Instance.new("ScrollingFrame")
-chunkScroll.Name = "ChunkScroll"
-chunkScroll.Size = UDim2.new(0.55, -5, 1, 0)
-chunkScroll.Position = UDim2.new(0, 0, 0, 0)
-chunkScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-chunkScroll.BorderSizePixel = 0
-chunkScroll.ScrollBarThickness = 2
-chunkScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-chunkScroll.Parent = actionContainer
+local actionLayout = Instance.new("UIListLayout")
+actionLayout.FillDirection = Enum.FillDirection.Horizontal
+actionLayout.Padding = UDim.new(0, 6)
+actionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+actionLayout.Parent = actionContainer
 
-local chunkLayout = Instance.new("UIListLayout")
-chunkLayout.FillDirection = Enum.FillDirection.Horizontal
-chunkLayout.Padding = UDim.new(0, 3)
-chunkLayout.Parent = chunkScroll
-
-local rightButtonsFrame = Instance.new("Frame")
-rightButtonsFrame.Size = UDim2.new(0.45, 0, 1, 0)
-rightButtonsFrame.Position = UDim2.new(0.55, 5, 0, 0)
-rightButtonsFrame.BackgroundTransparency = 1
-rightButtonsFrame.Parent = actionContainer
-
-local rightLayout = Instance.new("UIListLayout")
-rightLayout.FillDirection = Enum.FillDirection.Horizontal
-rightLayout.Padding = UDim.new(0, 4)
-rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-rightLayout.Parent = rightButtonsFrame
-
-local function createActionButton(text, color, parent)
+local function createActionButton(text, color)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 95, 1, 0)
+    btn.Size = UDim2.new(0, 90, 1, 0)
     btn.BackgroundColor3 = color
     btn.BorderSizePixel = 0
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.TextSize = 9
     btn.Font = Enum.Font.SourceSansBold
-    btn.Parent = parent
+    btn.Parent = actionContainer
     return btn
 end
 
-local copyPathBtn = createActionButton("Copy Path", Color3.fromRGB(120, 60, 180), rightButtonsFrame)
-local copyPropsBtn = createActionButton("Copy Props", Color3.fromRGB(40, 130, 200), rightButtonsFrame)
+local copyAllBtn = createActionButton("Copy All", Color3.fromRGB(200, 80, 40))
+local copyPropsBtn = createActionButton("Copy Props", Color3.fromRGB(40, 130, 200))
+local copyPathBtn = createActionButton("Copy Path", Color3.fromRGB(120, 60, 180))
 
 -- Helper Logic
 local extendedProps = {
@@ -337,76 +317,24 @@ function MiniDex.GetObjectDataLines(obj)
     return lines
 end
 
--- Dynamic Character-Limit Chunking (Prevents Excessive Splitting)
-local function updateChunkButtons(obj)
-    for _, child in ipairs(chunkScroll:GetChildren()) do
-        if not child:IsA("UIListLayout") then child:Destroy() end
-    end
-
-    if not obj then return end
-
-    task.spawn(function()
-        local descendants = obj:GetDescendants()
-        table.insert(descendants, 1, obj)
-
-        local chunks = {}
-        local currentChunk = {}
-        local currentSize = 0
-        local maxChars = MiniDex.MaxCharsPerChunk
-
-        for i, item in ipairs(descendants) do
-            local itemLines = MiniDex.GetObjectDataLines(item)
-            local itemText = table.concat(itemLines, "\n") .. "\n------------------------------\n"
-            local itemLen = #itemText
-
-            if (currentSize + itemLen > maxChars) and (#currentChunk > 0) then
-                table.insert(chunks, table.concat(currentChunk, "\n"))
-                currentChunk = {}
-                currentSize = 0
-            end
-
-            table.insert(currentChunk, itemText)
-            currentSize = currentSize + itemLen
-
-            if i % 25 == 0 then task.wait() end -- Yield frame for large scans
-        end
-
-        if #currentChunk > 0 then
-            table.insert(chunks, table.concat(currentChunk, "\n"))
-        end
-
-        chunkScroll.CanvasSize = UDim2.new(0, #chunks * 32, 0, 0)
-
-        for chunkIdx, payload in ipairs(chunks) do
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(0, 28, 1, 0)
-            btn.BackgroundColor3 = Color3.fromRGB(200, 80, 40)
-            btn.BorderSizePixel = 0
-            btn.Text = tostring(chunkIdx)
-            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            btn.TextSize = 10
-            btn.Font = Enum.Font.SourceSansBold
-            btn.Parent = chunkScroll
-
-            btn.MouseButton1Click:Connect(function()
-                if setclipboard then
-                    setclipboard(payload)
-                    btn.Text = "OK"
-                    task.delay(1, function() btn.Text = tostring(chunkIdx) end)
-                end
-            end)
-        end
-    end)
-end
-
 local function loadProperties(obj)
     MiniDex.SelectedObject = obj
     for _, child in ipairs(propScroll:GetChildren()) do
         if not child:IsA("UIListLayout") then child:Destroy() end
     end
     
-    updateChunkButtons(obj)
-    if not obj then return end
+    if not obj then 
+        copyAllBtn.Visible = false
+        return 
+    end
+
+    -- Check descendant count for safe Copy All usage
+    local count = #obj:GetDescendants()
+    if count > MiniDex.MaxDescendantSafetyCap then
+        copyAllBtn.Visible = false
+    else
+        copyAllBtn.Visible = true
+    end
 
     local textLines = MiniDex.GetObjectDataLines(obj)
     for _, line in ipairs(textLines) do
@@ -524,6 +452,30 @@ copyPropsBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+copyAllBtn.MouseButton1Click:Connect(function()
+    if MiniDex.SelectedObject and setclipboard then
+        copyAllBtn.Text = "Copying..."
+        task.spawn(function()
+            local allLines = {}
+            local mainData = MiniDex.GetObjectDataLines(MiniDex.SelectedObject)
+            for _, line in ipairs(mainData) do table.insert(allLines, line) end
+            table.insert(allLines, "\n==============================\n")
+
+            local descendants = MiniDex.SelectedObject:GetDescendants()
+            for i, desc in ipairs(descendants) do
+                local descData = MiniDex.GetObjectDataLines(desc)
+                for _, line in ipairs(descData) do table.insert(allLines, line) end
+                table.insert(allLines, "\n------------------------------\n")
+                if i % 20 == 0 then task.wait() end
+            end
+
+            setclipboard(table.concat(allLines, "\n"))
+            copyAllBtn.Text = "Copied All!"
+            task.delay(1, function() copyAllBtn.Text = "Copy All" end)
+        end)
+    end
+end)
+
 -- Register Default Core Folders
 _G.MiniDex_AddFolders({
     Workspace = game:GetService("Workspace"),
@@ -533,6 +485,15 @@ _G.MiniDex_AddFolders({
 })
 
 MiniDex.RenderDirectory(game:GetService("Workspace"))
+
+
+ 
+
+
+
+
+
+
 
 
 
