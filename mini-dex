@@ -1,0 +1,537 @@
+-- Localize Services
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
+local StarterPack = game:GetService("StarterPack")
+local Teams = game:GetService("Teams")
+local SoundService = game:GetService("SoundService")
+local MaterialService = game:GetService("MaterialService")
+local UserInputService = game:GetService("UserInputService")
+local TextChatService = game:GetService("TextChatService")
+local VoiceChatService = game:GetService("VoiceChatService")
+local PhysicsService = game:GetService("PhysicsService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local ContextActionService = game:GetService("ContextActionService")
+
+local lp = Players.LocalPlayer
+
+local function getSafeGuiParent()
+    if gethui then return gethui() end
+    local success, result = pcall(function() return CoreGui:FindFirstChild("RobloxGui") end)
+    if success and result then return result end
+    return lp:WaitForChild("PlayerGui")
+end
+
+-- Comprehensive Class Color Palette
+local classColors = {
+    Folder = Color3.fromRGB(240, 200, 80),
+    Model = Color3.fromRGB(255, 170, 40),
+    Part = Color3.fromRGB(0, 162, 255),
+    MeshPart = Color3.fromRGB(0, 180, 230),
+    UnionOperation = Color3.fromRGB(0, 140, 220),
+    Humanoid = Color3.fromRGB(255, 85, 85),
+    Player = Color3.fromRGB(255, 100, 100),
+    Script = Color3.fromRGB(50, 205, 50),
+    LocalScript = Color3.fromRGB(80, 220, 100),
+    ModuleScript = Color3.fromRGB(40, 180, 120),
+    Tool = Color3.fromRGB(180, 100, 255),
+    Accessory = Color3.fromRGB(200, 130, 255),
+    Shirt = Color3.fromRGB(200, 130, 255),
+    Pants = Color3.fromRGB(200, 130, 255),
+    StringValue = Color3.fromRGB(0, 220, 220),
+    NumberValue = Color3.fromRGB(0, 220, 220),
+    IntValue = Color3.fromRGB(0, 220, 220),
+    BoolValue = Color3.fromRGB(0, 220, 220),
+    ObjectValue = Color3.fromRGB(0, 220, 220),
+    CFrameValue = Color3.fromRGB(0, 220, 220),
+    Vector3Value = Color3.fromRGB(0, 220, 220),
+    Color3Value = Color3.fromRGB(0, 220, 220),
+    RemoteEvent = Color3.fromRGB(255, 100, 180),
+    RemoteFunction = Color3.fromRGB(255, 120, 200),
+    BindableEvent = Color3.fromRGB(255, 140, 150),
+    BindableFunction = Color3.fromRGB(255, 160, 170),
+    Sound = Color3.fromRGB(255, 200, 100),
+    ScreenGui = Color3.fromRGB(100, 200, 255),
+    Frame = Color3.fromRGB(120, 180, 240),
+    TextLabel = Color3.fromRGB(140, 190, 250),
+    TextButton = Color3.fromRGB(140, 190, 250),
+    ImageLabel = Color3.fromRGB(140, 190, 250),
+    ImageButton = Color3.fromRGB(140, 190, 250),
+    Team = Color3.fromRGB(255, 220, 100),
+    SpecialMesh = Color3.fromRGB(150, 200, 230),
+    PointLight = Color3.fromRGB(255, 255, 150),
+    SpotLight = Color3.fromRGB(255, 255, 150),
+    SurfaceLight = Color3.fromRGB(255, 255, 150),
+    ParticleEmitter = Color3.fromRGB(255, 150, 200),
+    Trail = Color3.fromRGB(255, 150, 200),
+    Beam = Color3.fromRGB(255, 150, 200),
+    Animation = Color3.fromRGB(180, 255, 180),
+    Animator = Color3.fromRGB(180, 255, 180)
+}
+
+local defaultColor = Color3.fromRGB(210, 210, 210)
+
+local function getClassColor(instance)
+    for className, color in pairs(classColors) do
+        if instance:IsA(className) then return color end
+    end
+    return defaultColor
+end
+
+-- Expanded Service Map
+local services = {
+    ["Workspace"] = Workspace,
+    ["Players"] = Players,
+    ["ReplicatedStorage"] = ReplicatedStorage,
+    ["ReplicatedFirst"] = ReplicatedFirst,
+    ["Lighting"] = Lighting,
+    ["StarterGui"] = StarterGui,
+    ["StarterPack"] = StarterPack,
+    ["Teams"] = Teams,
+    ["SoundService"] = SoundService,
+    ["MaterialService"] = MaterialService
+}
+
+local optionalServices = {
+    ["TextChatService"] = TextChatService,
+    ["VoiceChatService"] = VoiceChatService,
+    ["PhysicsService"] = PhysicsService,
+    ["TweenService"] = TweenService,
+    ["HttpService"] = HttpService,
+    ["RunService"] = RunService,
+    ["ContextActionService"] = ContextActionService,
+    ["JointsService"] = pcall(function() return game:GetService("JointsService") end) and game:GetService("JointsService") or nil,
+    ["CoreGui"] = pcall(function() return CoreGui end) and CoreGui or nil
+}
+
+for name, service in pairs(optionalServices) do
+    if service then services[name] = service end
+end
+
+-- ScreenGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "ExpandedWorkspaceExplorer"
+gui.ResetOnSpawn = false
+gui.Parent = getSafeGuiParent()
+
+-- Main Frame Window
+local main = Instance.new("Frame")
+main.Name = "MainFrame"
+main.Size = UDim2.new(0, 320, 0, 420)
+main.Position = UDim2.new(0.05, 0, 0.1, 0)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+main.BorderSizePixel = 1
+main.BorderColor3 = Color3.fromRGB(55, 55, 55)
+main.Active = true
+main.Parent = gui
+
+-- Draggable Toggle Button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "DexToggleBtn"
+toggleBtn.Size = UDim2.new(0, 48, 0, 26)
+toggleBtn.Position = UDim2.new(0.01, 0, 0.1, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleBtn.BorderColor3 = Color3.fromRGB(80, 80, 80)
+toggleBtn.BorderSizePixel = 1
+toggleBtn.Text = "DEX"
+toggleBtn.TextColor3 = Color3.fromRGB(0, 220, 220)
+toggleBtn.TextSize = 11
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.Active = true
+toggleBtn.Parent = gui
+
+local toggleDragging, toggleStart, startPosToggle
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        toggleDragging = true
+        toggleStart = input.Position
+        startPosToggle = toggleBtn.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if toggleDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - toggleStart
+        toggleBtn.Position = UDim2.new(startPosToggle.X.Scale, startPosToggle.X.Offset + delta.X, startPosToggle.Y.Scale, startPosToggle.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        toggleDragging = false
+    end
+end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    main.Visible = not main.Visible
+end)
+
+-- Header Bar
+local header = Instance.new("TextLabel")
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 24)
+header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+header.BorderSizePixel = 0
+header.Text = "  Expanded Dex Explorer"
+header.TextColor3 = Color3.fromRGB(255, 255, 255)
+header.TextSize = 11
+header.Font = Enum.Font.SourceSansBold
+header.TextXAlignment = Enum.TextXAlignment.Left
+header.Parent = main
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 24, 0, 24)
+closeBtn.Position = UDim2.new(1, -24, 0, 0)
+closeBtn.BackgroundColor3 = Color3.fromRGB(190, 40, 40)
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 11
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.Parent = header
+closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
+
+-- Service Switcher
+local serviceScroll = Instance.new("ScrollingFrame")
+serviceScroll.Name = "ServiceScroll"
+serviceScroll.Size = UDim2.new(1, -4, 0, 24)
+serviceScroll.Position = UDim2.new(0, 2, 0, 26)
+serviceScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+serviceScroll.BorderSizePixel = 0
+serviceScroll.ScrollBarThickness = 2
+serviceScroll.Parent = main
+
+local serviceLayout = Instance.new("UIListLayout")
+serviceLayout.FillDirection = Enum.FillDirection.Horizontal
+serviceLayout.SortOrder = Enum.SortOrder.LayoutOrder
+serviceLayout.Padding = UDim.new(0, 2)
+serviceLayout.Parent = serviceScroll
+
+-- Search Bar
+local searchFrame = Instance.new("Frame")
+searchFrame.Size = UDim2.new(1, -4, 0, 22)
+searchFrame.Position = UDim2.new(0, 2, 0, 52)
+searchFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+searchFrame.BorderSizePixel = 0
+searchFrame.Parent = main
+
+local searchIcon = Instance.new("TextLabel")
+searchIcon.Size = UDim2.new(0, 20, 1, 0)
+searchIcon.BackgroundTransparency = 1
+searchIcon.Text = "🔍"
+searchIcon.TextSize = 9
+searchIcon.Parent = searchFrame
+
+local searchBox = Instance.new("TextBox")
+searchBox.Name = "SearchBox"
+searchBox.Size = UDim2.new(1, -22, 1, 0)
+searchBox.Position = UDim2.new(0, 20, 0, 0)
+searchBox.BackgroundTransparency = 1
+searchBox.PlaceholderText = "Fuzzy search name, class, path, attribute..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+searchBox.Text = ""
+searchBox.TextColor3 = Color3.fromRGB(240, 240, 240)
+searchBox.TextSize = 10
+searchBox.Font = Enum.Font.SourceSans
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = searchFrame
+
+-- State & Navigation
+local currentParent = Workspace
+local selectedObject = nil
+local lastCopiedData = ""
+local activeFilter = ""
+
+local backBtn = Instance.new("TextButton")
+backBtn.Size = UDim2.new(0, 48, 0, 20)
+backBtn.Position = UDim2.new(0, 2, 0, 76)
+backBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+backBtn.BorderSizePixel = 0
+backBtn.Text = "◄ Back"
+backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+backBtn.TextSize = 10
+backBtn.Font = Enum.Font.SourceSans
+backBtn.Parent = main
+
+local pathLabel = Instance.new("TextLabel")
+pathLabel.Size = UDim2.new(1, -54, 0, 20)
+pathLabel.Position = UDim2.new(0, 52, 0, 76)
+pathLabel.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+pathLabel.BorderSizePixel = 0
+pathLabel.Text = " Workspace"
+pathLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+pathLabel.TextSize = 9
+pathLabel.Font = Enum.Font.SourceSans
+pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+pathLabel.ClipsDescendants = true
+pathLabel.Parent = main
+
+-- Explorer Scroll Area
+local explorerScroll = Instance.new("ScrollingFrame")
+explorerScroll.Name = "ExplorerScroll"
+explorerScroll.Size = UDim2.new(1, -4, 0, 150)
+explorerScroll.Position = UDim2.new(0, 2, 0, 98)
+explorerScroll.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+explorerScroll.BorderSizePixel = 0
+explorerScroll.ScrollBarThickness = 4
+explorerScroll.Parent = main
+
+local explorerLayout = Instance.new("UIListLayout")
+explorerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+explorerLayout.Parent = explorerScroll
+
+-- Property Header
+local propHeaderFrame = Instance.new("Frame")
+propHeaderFrame.Size = UDim2.new(1, -4, 0, 20)
+propHeaderFrame.Position = UDim2.new(0, 2, 0, 250)
+propHeaderFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+propHeaderFrame.BorderSizePixel = 0
+propHeaderFrame.Parent = main
+
+local propHeaderLabel = Instance.new("TextLabel")
+propHeaderLabel.Size = UDim2.new(1, -170, 1, 0)
+propHeaderLabel.BackgroundTransparency = 1
+propHeaderLabel.Text = " Deep Properties"
+propHeaderLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+propHeaderLabel.TextSize = 10
+propHeaderLabel.Font = Enum.Font.SourceSansBold
+propHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
+propHeaderLabel.Parent = propHeaderFrame
+
+local copyPathBtn = Instance.new("TextButton")
+copyPathBtn.Size = UDim2.new(0, 52, 1, -2)
+copyPathBtn.Position = UDim2.new(1, -166, 0, 1)
+copyPathBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 180)
+copyPathBtn.BorderSizePixel = 0
+copyPathBtn.Text = "Copy Path"
+copyPathBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyPathBtn.TextSize = 8
+copyPathBtn.Font = Enum.Font.SourceSansBold
+copyPathBtn.Parent = propHeaderFrame
+
+local copyBtn = Instance.new("TextButton")
+copyBtn.Size = UDim2.new(0, 54, 1, -2)
+copyBtn.Position = UDim2.new(1, -112, 0, 1)
+copyBtn.BackgroundColor3 = Color3.fromRGB(40, 130, 200)
+copyBtn.BorderSizePixel = 0
+copyBtn.Text = "Copy Props"
+copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyBtn.TextSize = 8
+copyBtn.Font = Enum.Font.SourceSansBold
+copyBtn.Parent = propHeaderFrame
+
+local copyAllBtn = Instance.new("TextButton")
+copyAllBtn.Size = UDim2.new(0, 54, 1, -2)
+copyAllBtn.Position = UDim2.new(1, -56, 0, 1)
+copyAllBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 40)
+copyAllBtn.BorderSizePixel = 0
+copyAllBtn.Text = "Copy All"
+copyAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyAllBtn.TextSize = 8
+copyAllBtn.Font = Enum.Font.SourceSansBold
+copyAllBtn.Parent = propHeaderFrame
+
+-- Properties Scroll Area
+local propScroll = Instance.new("ScrollingFrame")
+propScroll.Name = "PropScroll"
+propScroll.Size = UDim2.new(1, -4, 0, 146)
+propScroll.Position = UDim2.new(0, 2, 0, 271)
+propScroll.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+propScroll.BorderSizePixel = 0
+propScroll.ScrollBarThickness = 4
+propScroll.Parent = main
+
+local propLayout = Instance.new("UIListLayout")
+propLayout.SortOrder = Enum.SortOrder.LayoutOrder
+propLayout.Parent = propScroll
+
+-- Draggable Logic
+local dragging, dragStart, startPos
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Comprehensive Property List
+local extendedProps = {
+    "ClassName", "Parent", "Name", "Value", "ToolTip", "TextureId", "SoundId", "Volume", "Playing",
+    "PrimaryPart", "Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight",
+    "Position", "Size", "Orientation", "Anchored", "CanCollide", "CanQuery", "CanTouch", "Transparency", "Reflectance",
+    "Color", "Material", "Disabled", "UserId", "TeamColor", "AutoLoadCharacter",
+    "Archivable", "PlaybackSpeed", "TimePosition", "Looped", "RollOffMaxDistance", "RollOffMinDistance",
+    "FieldOfView", "CameraType", "Brightness", "ClockTime", "FogEnd", "FogStart", "Ambient", "OutdoorAmbient",
+    "Adornee", "AlwaysOnTop", "StudsPerTileU", "StudsPerTileV", "Face", "Part0", "Part1", "C0", "C1",
+    "Intensity", "Range", "Enabled", "Color", "Size", "Texture", "Lifetime", "Rate", "Speed", "SpreadAngle"
+}
+
+-- Precise Code Path Formatting Generator
+local function getExactCodePath(obj)
+    if not obj then return "" end
+    local pathParts = {}
+    local curr = obj
+
+    while curr and curr ~= game do
+        local name = curr.Name
+        if string.match(name, "^[%a_][%w_]*$") then
+            table.insert(pathParts, 1, "." .. name)
+        else
+            local escaped = string.gsub(name, '"', '\\"')
+            table.insert(pathParts, 1, '["' .. escaped .. '"]')
+        end
+        curr = curr.Parent
+    end
+
+    local path = table.concat(pathParts, "")
+    if string.sub(path, 1, 1) == "." then
+        path = string.sub(path, 2)
+    end
+    return "game:GetService(\"" .. obj:GetFullName():split(".")[1] .. "\")" .. string.sub(path, string.len(obj:GetFullName():split(".")[1]) + 1)
+end
+
+-- Deep Inspection Function
+local function getObjectDataLines(obj)
+    local fullPath = obj:GetFullName()
+    local exactCodePath = getExactCodePath(obj)
+
+    local lines = {
+        "Target: " .. obj.Name,
+        "Class: " .. obj.ClassName,
+        "Path: " .. fullPath,
+        "CodePath: " .. exactCodePath,
+        "------------------------------"
+    }
+
+    for _, prop in ipairs(extendedProps) do
+        local success, val = pcall(function() return obj[prop] end)
+        if success and val ~= nil then
+            local strVal = tostring(val)
+            if typeof(val) == "Vector3" then
+                strVal = string.format("Vector3.new(%.4f, %.4f, %.4f)", val.X, val.Y, val.Z)
+            elseif typeof(val) == "Color3" then
+                strVal = string.format("Color3.fromRGB(%d, %d, %d)", math.floor(val.R*255), math.floor(val.G*255), math.floor(val.B*255))
+            elseif typeof(val) == "CFrame" then
+                local components = {val:GetComponents()}
+                strVal = string.format("CFrame.new(" .. string.rep("%.2f, ", 11) .. "%.2f)", table.unpack(components))
+            elseif typeof(val) == "Instance" then
+                strVal = val:GetFullName()
+            end
+            table.insert(lines, prop .. ": " .. strVal)
+        end
+    end
+
+    local attributes = obj:GetAttributes()
+    for attrName, attrValue in pairs(attributes) do
+        local strVal = tostring(attrValue)
+        if typeof(attrValue) == "Vector3" then
+            strVal = string.format("Vector3.new(%.4f, %.4f, %.4f)", attrValue.X, attrValue.Y, attrValue.Z)
+        elseif typeof(attrValue) == "Color3" then
+            strVal = string.format("Color3.fromRGB(%d, %d, %d)", math.floor(attrValue.R*255), math.floor(attrValue.G*255), math.floor(attrValue.B*255))
+        end
+        table.insert(lines, "[Attr] " .. attrName .. ": " .. strVal)
+    end
+
+    return lines
+end
+
+-- Load Properties UI
+local function loadProperties(obj)
+    selectedObject = obj
+    lastCopiedData = ""
+    
+    for _, child in ipairs(propScroll:GetChildren()) do
+        if not child:IsA("UIListLayout") then child:Destroy() end
+    end
+
+    if not obj then return end
+
+    local textLines = getObjectDataLines(obj)
+
+    local count = 0
+    for _, line in ipairs(textLines) do
+        count = count + 1
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 0, 15)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = string.find(line, "%[Attr%]") and Color3.fromRGB(255, 215, 0) or string.find(line, "^CodePath:") and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
+        label.TextSize = 9
+        label.Font = Enum.Font.SourceSans
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Text = " " .. line
+        label.Parent = propScroll
+    end
+
+    lastCopiedData = table.concat(textLines, "\n")
+    propScroll.CanvasSize = UDim2.new(0, 0, 0, count * 15)
+end
+
+-- Fuzzy Search Match Engine
+local function isFuzzyMatch(instance, query)
+    if query == "" then return true end
+    local q = string.lower(query)
+    
+    -- Check Name and ClassName
+    if string.find(string.lower(instance.Name), q, 1, true) then return true end
+    if string.find(string.lower(instance.ClassName), q, 1, true) then return true end
+    
+    -- Check Path
+    if string.find(string.lower(instance:GetFullName()), q, 1, true) then return true end
+
+    -- Check Attributes
+    local attrs = instance:GetAttributes()
+    for attrName, attrVal in pairs(attrs) do
+        if string.find(string.lower(attrName), q, 1, true) or string.find(string.lower(tostring(attrVal)), q, 1, true) then
+            return true
+        end
+    end
+
+    return false
+end
+
+-- Forward declaration
+local renderDirectory
+
+-- Deep Workspace Search Traversal
+local function getMatchingDescendants(parent, query)
+    local matches = {}
+    local function traverse(target)
+        for _, child in ipairs(target:GetChildren()) do
+            if isFuzzyMatch(child, query) then
+                table.insert(matches, child)
+            end
+            traverse(child)
+        end
+    end
+    traverse(parent)
+    return matches
+end
+
+-- Main Directory Renderer
+function renderDirectory(target)
+    currentParent = target
+    pathLabel.Text = " " .. target:GetFullName()
+
+    for _, v in ipairs(explorerScroll:GetChildren()) do
+ 
