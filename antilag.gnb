@@ -1,0 +1,216 @@
+local function getService(name)
+    local service = game:GetService(name)
+    return cloneref and cloneref(service) or service
+end
+
+local Players = getService("Players")
+local Lighting = getService("Lighting")
+local Workspace = getService("Workspace")
+local RunService = getService("RunService")
+local CoreGui = getService("CoreGui")
+local UserInputService = getService("UserInputService")
+
+local lp = Players.LocalPlayer
+
+local function getRandomName()
+    local str = ""
+    for i = 1, math.random(8, 14) do
+        str = str .. string.char(math.random(97, 122))
+    end
+    return str
+end
+
+local function getGuiParent()
+    if gethui then return gethui() end
+    local ok, res = pcall(function() return CoreGui:FindFirstChild("RobloxGui") end)
+    if ok and res then return res end
+    return lp:WaitForChild("PlayerGui")
+end
+
+-- Screen Container
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = getRandomName()
+screenGui.ResetOnSpawn = false
+screenGui.Parent = getGuiParent()
+
+-- UI Dragging Helper
+local function makeDraggable(guiObject)
+    local dragging, dragStart, startPos
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+-- Standalone Button 1: Anti-Lag / Lighting Toggle
+local antiLagBtn = Instance.new("TextButton")
+antiLagBtn.Name = getRandomName()
+antiLagBtn.Size = UDim2.new(0, 70, 0, 26)
+antiLagBtn.Position = UDim2.new(0.01, 0, 0.2, 0)
+antiLagBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+antiLagBtn.BorderSizePixel = 1
+antiLagBtn.BorderColor3 = Color3.fromRGB(80, 80, 80)
+antiLagBtn.Text = "LAG: OFF"
+antiLagBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+antiLagBtn.Font = Enum.Font.SourceSansBold
+antiLagBtn.TextSize = 10
+antiLagBtn.Active = true
+antiLagBtn.Parent = screenGui
+makeDraggable(antiLagBtn)
+
+-- Standalone Button 2: Hide Players Toggle
+local hidePlayersBtn = Instance.new("TextButton")
+hidePlayersBtn.Name = getRandomName()
+hidePlayersBtn.Size = UDim2.new(0, 70, 0, 26)
+hidePlayersBtn.Position = UDim2.new(0.01, 0, 0.25, 0)
+hidePlayersBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+hidePlayersBtn.BorderSizePixel = 1
+hidePlayersBtn.BorderColor3 = Color3.fromRGB(80, 80, 80)
+hidePlayersBtn.Text = "HIDE: OFF"
+hidePlayersBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+hidePlayersBtn.Font = Enum.Font.SourceSansBold
+hidePlayersBtn.TextSize = 10
+hidePlayersBtn.Active = true
+hidePlayersBtn.Parent = screenGui
+makeDraggable(hidePlayersBtn)
+
+-- Feature Logic Variables
+local antiLagActive = false
+local hidePlayersActive = false
+
+local originalLighting = {
+    ClockTime = Lighting.ClockTime,
+    Brightness = Lighting.Brightness,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient
+}
+
+local lightingConnection
+
+-- Anti-Lag Engine Toggle
+antiLagBtn.MouseButton1Click:Connect(function()
+    antiLagActive = not antiLagActive
+    antiLagBtn.Text = "LAG: " .. (antiLagActive and "ON" or "OFF")
+    antiLagBtn.TextColor3 = antiLagActive and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
+
+    if antiLagActive then
+        for _, obj in ipairs(Lighting:GetChildren()) do
+            if obj:IsA("PostEffect") or obj:IsA("Atmosphere") then
+                obj.Enabled = false
+            end
+        end
+
+        lightingConnection = RunService.RenderStepped:Connect(function()
+            if antiLagActive then
+                Lighting.ClockTime = 14
+                Lighting.Brightness = 2
+                Lighting.FogEnd = 100000
+                Lighting.GlobalShadows = false
+                Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+                Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+
+                local weather = Workspace:FindFirstChild("Weather")
+                if weather then
+                    weather.Value = "Clear"
+                    local freezing = weather:FindFirstChild("Freezing")
+                    if freezing then freezing.Value = false end
+                end
+            end
+        end)
+
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                obj.Enabled = false
+            end
+        end
+    else
+        if lightingConnection then
+            lightingConnection:Disconnect()
+            lightingConnection = nil
+        end
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.Ambient = originalLighting.Ambient
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+
+        for _, obj in ipairs(Lighting:GetChildren()) do
+            if obj:IsA("PostEffect") or obj:IsA("Atmosphere") then
+                obj.Enabled = true
+            end
+        end
+
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                obj.Enabled = true
+            end
+        end
+    end
+end)
+
+Workspace.DescendantAdded:Connect(function(obj)
+    if antiLagActive and (obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles")) then
+        obj.Enabled = false
+    end
+end)
+
+-- Hide Teammates Engine Toggle
+local storedTransparency = {}
+
+local function applyPlayerVisibility(player, hide)
+    if player == lp or not player.Character then return end
+
+    for _, part in ipairs(player.Character:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            if hide then
+                if not storedTransparency[part] then
+                    storedTransparency[part] = part.Transparency
+                end
+                part.Transparency = 1
+            else
+                if storedTransparency[part] then
+                    part.Transparency = storedTransparency[part]
+                    storedTransparency[part] = nil
+                end
+            end
+        end
+    end
+end
+
+hidePlayersBtn.MouseButton1Click:Connect(function()
+    hidePlayersActive = not hidePlayersActive
+    hidePlayersBtn.Text = "HIDE: " .. (hidePlayersActive and "ON" or "OFF")
+    hidePlayersBtn.TextColor3 = hidePlayersActive and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        applyPlayerVisibility(player, hidePlayersActive)
+    end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if hidePlayersActive then
+            applyPlayerVisibility(player, true)
+        end
+    end)
+end)
