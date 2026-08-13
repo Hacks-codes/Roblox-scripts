@@ -14,7 +14,7 @@ local lp = Players.LocalPlayer
 
 local function getRandomName()
     local str = ""
-    for i = 1, math.random(8, 14) do
+    for _ = 1, math.random(8, 14) do
         str = str .. string.char(math.random(97, 122))
     end
     return str
@@ -27,13 +27,11 @@ local function getGuiParent()
     return lp:WaitForChild("PlayerGui")
 end
 
--- Screen Container
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = getRandomName()
 screenGui.ResetOnSpawn = false
 screenGui.Parent = getGuiParent()
 
--- UI Dragging Helper
 local function makeDraggable(guiObject)
     local dragging, dragStart, startPos
     guiObject.InputBegan:Connect(function(input)
@@ -58,140 +56,125 @@ local function makeDraggable(guiObject)
     end)
 end
 
--- Standalone Button 1: Anti-Lag / Lighting Toggle
+-- Button 1: Anti-Lag / Brightness
 local antiLagBtn = Instance.new("TextButton")
 antiLagBtn.Name = getRandomName()
-antiLagBtn.Size = UDim2.new(0, 70, 0, 26)
+antiLagBtn.Size = UDim2.new(0, 75, 0, 28)
 antiLagBtn.Position = UDim2.new(0.01, 0, 0.2, 0)
-antiLagBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+antiLagBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 antiLagBtn.BorderSizePixel = 1
 antiLagBtn.BorderColor3 = Color3.fromRGB(80, 80, 80)
 antiLagBtn.Text = "LAG: OFF"
 antiLagBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
 antiLagBtn.Font = Enum.Font.SourceSansBold
-antiLagBtn.TextSize = 10
+antiLagBtn.TextSize = 11
 antiLagBtn.Active = true
 antiLagBtn.Parent = screenGui
 makeDraggable(antiLagBtn)
 
--- Standalone Button 2: Hide Players Toggle
+-- Button 2: Hide Teammates
 local hidePlayersBtn = Instance.new("TextButton")
 hidePlayersBtn.Name = getRandomName()
-hidePlayersBtn.Size = UDim2.new(0, 70, 0, 26)
-hidePlayersBtn.Position = UDim2.new(0.01, 0, 0.25, 0)
-hidePlayersBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+hidePlayersBtn.Size = UDim2.new(0, 75, 0, 28)
+hidePlayersBtn.Position = UDim2.new(0.01, 0, 0.26, 0)
+hidePlayersBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 hidePlayersBtn.BorderSizePixel = 1
 hidePlayersBtn.BorderColor3 = Color3.fromRGB(80, 80, 80)
 hidePlayersBtn.Text = "HIDE: OFF"
 hidePlayersBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
 hidePlayersBtn.Font = Enum.Font.SourceSansBold
-hidePlayersBtn.TextSize = 10
+hidePlayersBtn.TextSize = 11
 hidePlayersBtn.Active = true
 hidePlayersBtn.Parent = screenGui
 makeDraggable(hidePlayersBtn)
 
--- Feature Logic Variables
 local antiLagActive = false
 local hidePlayersActive = false
+local renderConnection
 
-local originalLighting = {
-    ClockTime = Lighting.ClockTime,
-    Brightness = Lighting.Brightness,
-    FogEnd = Lighting.FogEnd,
-    GlobalShadows = Lighting.GlobalShadows,
-    Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient
-}
+-- Disable Weather & Force Fullbright
+local function applyFullbright()
+    Lighting.ClockTime = 14
+    Lighting.Brightness = 3
+    Lighting.FogEnd = 1e6
+    Lighting.GlobalShadows = false
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
 
-local lightingConnection
+    for _, v in ipairs(Lighting:GetChildren()) do
+        if v:IsA("PostEffect") or v:IsA("Atmosphere") or v:IsA("Sky") then
+            v.Enabled = false
+        end
+    end
 
--- Anti-Lag Engine Toggle
+    local weather = Workspace:FindFirstChild("Weather")
+    if weather then
+        weather.Value = "Clear"
+        local freezing = weather:FindFirstChild("Freezing")
+        if freezing then freezing.Value = false end
+    end
+end
+
 antiLagBtn.MouseButton1Click:Connect(function()
     antiLagActive = not antiLagActive
     antiLagBtn.Text = "LAG: " .. (antiLagActive and "ON" or "OFF")
     antiLagBtn.TextColor3 = antiLagActive and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
 
     if antiLagActive then
-        for _, obj in ipairs(Lighting:GetChildren()) do
-            if obj:IsA("PostEffect") or obj:IsA("Atmosphere") then
-                obj.Enabled = false
-            end
-        end
-
-        lightingConnection = RunService.RenderStepped:Connect(function()
+        renderConnection = RunService.PreRender:Connect(function()
             if antiLagActive then
-                Lighting.ClockTime = 14
-                Lighting.Brightness = 2
-                Lighting.FogEnd = 100000
-                Lighting.GlobalShadows = false
-                Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-                Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-
-                local weather = Workspace:FindFirstChild("Weather")
-                if weather then
-                    weather.Value = "Clear"
-                    local freezing = weather:FindFirstChild("Freezing")
-                    if freezing then freezing.Value = false end
-                end
+                applyFullbright()
             end
         end)
 
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                obj.Enabled = false
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                v.Enabled = false
             end
         end
     else
-        if lightingConnection then
-            lightingConnection:Disconnect()
-            lightingConnection = nil
+        if renderConnection then
+            renderConnection:Disconnect()
+            renderConnection = nil
         end
-        Lighting.ClockTime = originalLighting.ClockTime
-        Lighting.Brightness = originalLighting.Brightness
-        Lighting.FogEnd = originalLighting.FogEnd
-        Lighting.GlobalShadows = originalLighting.GlobalShadows
-        Lighting.Ambient = originalLighting.Ambient
-        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
-
-        for _, obj in ipairs(Lighting:GetChildren()) do
-            if obj:IsA("PostEffect") or obj:IsA("Atmosphere") then
-                obj.Enabled = true
-            end
-        end
-
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                obj.Enabled = true
+        
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v:IsA("PostEffect") or v:IsA("Atmosphere") or v:IsA("Sky") then
+                v.Enabled = true
             end
         end
     end
 end)
 
-Workspace.DescendantAdded:Connect(function(obj)
-    if antiLagActive and (obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles")) then
-        obj.Enabled = false
+Workspace.DescendantAdded:Connect(function(v)
+    if antiLagActive and (v:IsA("ParticleEmitter") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles")) then
+        v.Enabled = false
     end
 end)
 
--- Hide Teammates Engine Toggle
+-- Hide Players while keeping NameTags Visible & Through Walls
 local storedTransparency = {}
 
-local function applyPlayerVisibility(player, hide)
+local function processPlayerChar(player, hide)
     if player == lp or not player.Character then return end
-
-    for _, part in ipairs(player.Character:GetDescendants()) do
-        if part:IsA("BasePart") or part:IsA("Decal") then
+    
+    local char = player.Character
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:IsA("BasePart") or v:IsA("Decal") then
             if hide then
-                if not storedTransparency[part] then
-                    storedTransparency[part] = part.Transparency
+                if not storedTransparency[v] then
+                    storedTransparency[v] = v.Transparency
                 end
-                part.Transparency = 1
+                v.Transparency = 1
             else
-                if storedTransparency[part] then
-                    part.Transparency = storedTransparency[part]
-                    storedTransparency[part] = nil
+                if storedTransparency[v] then
+                    v.Transparency = storedTransparency[v]
+                    storedTransparency[v] = nil
                 end
             end
+        elseif v:IsA("BillboardGui") then
+            v.Enabled = true
+            v.AlwaysOnTop = hide -- Makes name tags visible through walls when hidden
         end
     end
 end
@@ -202,7 +185,7 @@ hidePlayersBtn.MouseButton1Click:Connect(function()
     hidePlayersBtn.TextColor3 = hidePlayersActive and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
 
     for _, player in ipairs(Players:GetPlayers()) do
-        applyPlayerVisibility(player, hidePlayersActive)
+        processPlayerChar(player, hidePlayersActive)
     end
 end)
 
@@ -210,7 +193,7 @@ Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
         task.wait(0.5)
         if hidePlayersActive then
-            applyPlayerVisibility(player, true)
+            processPlayerChar(player, true)
         end
     end)
 end)
