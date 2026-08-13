@@ -1,4 +1,4 @@
-Local function getService(name)
+local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
 end
