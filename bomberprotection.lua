@@ -1,4 +1,4 @@
--- Unified Precision & Bomber Utility Engine
+-- Unified Precision, Bomber & Auto-Attack Utility Engine
 local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
@@ -20,7 +20,10 @@ local states = {
     separateAimBtnVisible = false,
 
     bomberAim = false,
-    separateBomberBtnVisible = false
+    separateBomberBtnVisible = false,
+
+    autoAttack = false,
+    separateAttackBtnVisible = false
 }
 
 -- Utility Functions
@@ -93,8 +96,8 @@ screenGui.Parent = getGuiParent()
 -- Main Control Frame
 local frame = Instance.new("Frame")
 frame.Name = getRandomName()
-frame.Size = UDim2.new(0, 200, 0, 250)
-frame.Position = UDim2.new(0.5, -100, 0.35, -125)
+frame.Size = UDim2.new(0, 200, 0, 310)
+frame.Position = UDim2.new(0.5, -100, 0.35, -155)
 frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 frame.BorderSizePixel = 0
 frame.Visible = false
@@ -190,6 +193,24 @@ applyCorner(quickBomberBtn, 4)
 applyStroke(quickBomberBtn, Color3.fromRGB(80, 80, 80), 1)
 makeDraggable(quickBomberBtn, quickBomberBtn)
 
+-- Standalone Floating Auto Attack Toggle Button
+local quickAttackBtn = Instance.new("TextButton")
+quickAttackBtn.Name = getRandomName()
+quickAttackBtn.Size = UDim2.new(0, 85, 0, 24)
+quickAttackBtn.Position = UDim2.new(0.01, 0, 0.33, 0)
+quickAttackBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+quickAttackBtn.BorderSizePixel = 0
+quickAttackBtn.Text = "ATTACK: OFF"
+quickAttackBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+quickAttackBtn.Font = Enum.Font.SourceSansBold
+quickAttackBtn.TextSize = 10
+quickAttackBtn.Active = true
+quickAttackBtn.Visible = false
+quickAttackBtn.Parent = screenGui
+applyCorner(quickAttackBtn, 4)
+applyStroke(quickAttackBtn, Color3.fromRGB(80, 80, 80), 1)
+makeDraggable(quickAttackBtn, quickAttackBtn)
+
 -- Dynamic Button Generator Helper
 local function createToggleBtn(text, pos, onClick)
     local btn = Instance.new("TextButton")
@@ -208,10 +229,45 @@ local function createToggleBtn(text, pos, onClick)
     btn.MouseButton1Click:Connect(function() onClick(btn) end)
     return btn
 end
-
--- Synchronized Aim Controllers
+-- Synchronized Controllers
 local mainAimBtn
 local mainBomberBtn
+local mainAttackBtn
+
+-- Auto Attack Logic Function
+local function RunAutoAttack()
+    while states.autoAttack do
+        pcall(function()
+            local char = lp.Character
+            local Sabre = char and char:FindFirstChild("Sabre")
+            local SabreRemote = Sabre and Sabre:FindFirstChild("RemoteEvent")
+            local ZombieTarget = Workspace:FindFirstChild("Zombies") and Workspace.Zombies:FindFirstChild("Agent")
+
+            if SabreRemote and ZombieTarget then
+                SabreRemote:FireServer("Equip", char:WaitForChild("HumanoidRootPart"))
+                task.wait(0.1)
+
+                SabreRemote:FireServer("PrepareSwing")
+                SabreRemote:FireServer("Swing", "Thrust")
+                task.wait(0.15)
+
+                local Head = ZombieTarget:FindFirstChild("Head")
+                local HitPosition = Head and Head.Position or Vector3.new(-0.47, 671.64, -0.52)
+
+                SabreRemote:FireServer(
+                    "HitZombieM",
+                    ZombieTarget,
+                    HitPosition,
+                    true,
+                    Vector3.new(0, 1, 0),
+                    "Head",
+                    Vector3.new(0, 0, -1)
+                )
+            end
+        end)
+        task.wait(0.5)
+    end
+end
 
 local function setAimlockState(enabled)
     states.aimLock = enabled
@@ -253,6 +309,24 @@ local function setBomberAimState(enabled)
     end
 end
 
+local function setAutoAttackState(enabled)
+    states.autoAttack = enabled
+    local stateTxt = states.autoAttack and "ON" or "OFF"
+    local activeColor = states.autoAttack and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
+
+    if mainAttackBtn then
+        mainAttackBtn.Text = "Auto Attack: " .. stateTxt
+        mainAttackBtn.TextColor3 = activeColor
+    end
+
+    quickAttackBtn.Text = "ATTACK: " .. stateTxt
+    quickAttackBtn.TextColor3 = activeColor
+
+    if states.autoAttack then
+        task.spawn(RunAutoAttack)
+    end
+end
+
 -- GUI Controls Creation
 mainAimBtn = createToggleBtn("Aim Lock: OFF", UDim2.new(0, 5, 0, 28), function()
     setAimlockState(not states.aimLock)
@@ -284,10 +358,25 @@ createToggleBtn("Bomber Button: OFF", UDim2.new(0, 5, 0, 106), function(btn)
     btn.TextColor3 = states.separateBomberBtnVisible and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
 end)
 
+mainAttackBtn = createToggleBtn("Auto Attack: OFF", UDim2.new(0, 5, 0, 132), function()
+    setAutoAttackState(not states.autoAttack)
+end)
+
+quickAttackBtn.MouseButton1Click:Connect(function()
+    setAutoAttackState(not states.autoAttack)
+end)
+
+createToggleBtn("Auto Attack Button: OFF", UDim2.new(0, 5, 0, 158), function(btn)
+    states.separateAttackBtnVisible = not states.separateAttackBtnVisible
+    quickAttackBtn.Visible = states.separateAttackBtnVisible
+    btn.Text = "Auto Attack Button: " .. (states.separateAttackBtnVisible and "ON" or "OFF")
+    btn.TextColor3 = states.separateAttackBtnVisible and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
+end)
+
 -- Custom Aim Range Container
 local rangeContainer = Instance.new("Frame")
 rangeContainer.Size = UDim2.new(1, -10, 0, 22)
-rangeContainer.Position = UDim2.new(0, 5, 0, 132)
+rangeContainer.Position = UDim2.new(0, 5, 0, 184)
 rangeContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 rangeContainer.BorderSizePixel = 0
 rangeContainer.Parent = frame
@@ -328,7 +417,7 @@ rangeBox.FocusLost:Connect(function()
 end)
 
 -- Aim Mode Switcher
-createToggleBtn("Aim Mode: Body", UDim2.new(0, 5, 0, 158), function(btn)
+createToggleBtn("Aim Mode: Body", UDim2.new(0, 5, 0, 210), function(btn)
     states.aimMode = (states.aimMode == "Body") and "Camera" or "Body"
     btn.Text = "Aim Mode: " .. states.aimMode
 
@@ -342,7 +431,7 @@ local mainLoopConnection
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
 disableBtn.Size = UDim2.new(1, -10, 0, 22)
-disableBtn.Position = UDim2.new(0, 5, 0, 184)
+disableBtn.Position = UDim2.new(0, 5, 0, 236)
 disableBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
 disableBtn.BorderSizePixel = 0
 disableBtn.Text = "UNLOAD SCRIPT"
@@ -353,6 +442,10 @@ disableBtn.Parent = frame
 applyCorner(disableBtn, 4)
 
 disableBtn.MouseButton1Click:Connect(function()
+    states.autoAttack = false
+    states.aimLock = false
+    states.bomberAim = false
+
     if mainLoopConnection then
         mainLoopConnection:Disconnect()
         mainLoopConnection = nil
@@ -464,7 +557,6 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
             local headPos = targetHead.Position
 
             if states.aimMode == "Body" then
-                -- Disable auto-rotate to prevent Shift Lock from counter-rotating the character
                 hum.AutoRotate = false
                 local lookAtPos = Vector3.new(headPos.X, hrp.Position.Y, headPos.Z)
                 if (lookAtPos - hrp.Position).Magnitude > 0.01 then
@@ -480,6 +572,5 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Reset AutoRotate when no target is acquired or when aim features are toggled off
     hum.AutoRotate = true
 end)
