@@ -20,12 +20,8 @@ local states = {
     separateAimBtnVisible = false,
 
     bomberAim = false,
-    separateBomberBtnVisible = false,
-    bomberEsp = false
+    separateBomberBtnVisible = false
 }
-
--- ESP Tracking Cache
-local activeEspBoxes = {}
 
 -- Utility Functions
 local function getRandomName()
@@ -97,8 +93,8 @@ screenGui.Parent = getGuiParent()
 -- Main Control Frame
 local frame = Instance.new("Frame")
 frame.Name = getRandomName()
-frame.Size = UDim2.new(0, 200, 0, 280)
-frame.Position = UDim2.new(0.5, -100, 0.35, -140)
+frame.Size = UDim2.new(0, 200, 0, 250)
+frame.Position = UDim2.new(0.5, -100, 0.35, -125)
 frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 frame.BorderSizePixel = 0
 frame.Visible = false
@@ -213,13 +209,6 @@ local function createToggleBtn(text, pos, onClick)
     return btn
 end
 
-local function clearEsp()
-    for _, box in pairs(activeEspBoxes) do
-        if box and box.Parent then box:Destroy() end
-    end
-    table.clear(activeEspBoxes)
-end
-
 -- Synchronized Aim Controllers
 local mainAimBtn
 local mainBomberBtn
@@ -295,17 +284,10 @@ createToggleBtn("Bomber Button: OFF", UDim2.new(0, 5, 0, 106), function(btn)
     btn.TextColor3 = states.separateBomberBtnVisible and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
 end)
 
-createToggleBtn("Bomber ESP: OFF", UDim2.new(0, 5, 0, 132), function(btn)
-    states.bomberEsp = not states.bomberEsp
-    btn.Text = "Bomber ESP: " .. (states.bomberEsp and "ON" or "OFF")
-    btn.TextColor3 = states.bomberEsp and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
-    if not states.bomberEsp then clearEsp() end
-end)
-
 -- Custom Aim Range Container
 local rangeContainer = Instance.new("Frame")
 rangeContainer.Size = UDim2.new(1, -10, 0, 22)
-rangeContainer.Position = UDim2.new(0, 5, 0, 158)
+rangeContainer.Position = UDim2.new(0, 5, 0, 132)
 rangeContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 rangeContainer.BorderSizePixel = 0
 rangeContainer.Parent = frame
@@ -346,7 +328,7 @@ rangeBox.FocusLost:Connect(function()
 end)
 
 -- Aim Mode Switcher
-createToggleBtn("Aim Mode: Body", UDim2.new(0, 5, 0, 184), function(btn)
+createToggleBtn("Aim Mode: Body", UDim2.new(0, 5, 0, 158), function(btn)
     states.aimMode = (states.aimMode == "Body") and "Camera" or "Body"
     btn.Text = "Aim Mode: " .. states.aimMode
 
@@ -360,7 +342,7 @@ local mainLoopConnection
 local disableBtn = Instance.new("TextButton")
 disableBtn.Name = getRandomName()
 disableBtn.Size = UDim2.new(1, -10, 0, 22)
-disableBtn.Position = UDim2.new(0, 5, 0, 210)
+disableBtn.Position = UDim2.new(0, 5, 0, 184)
 disableBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
 disableBtn.BorderSizePixel = 0
 disableBtn.Text = "UNLOAD SCRIPT"
@@ -382,7 +364,6 @@ disableBtn.MouseButton1Click:Connect(function()
         if hum then hum.AutoRotate = true end
     end
 
-    clearEsp()
     screenGui:Destroy()
 end)
 
@@ -457,79 +438,33 @@ end
 
 -- Optimized RenderStepped Main Processing Loop
 mainLoopConnection = RunService.RenderStepped:Connect(function()
-    local zombiesFolder = Workspace:FindFirstChild("Zombies")
     local char = lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local camera = Workspace.CurrentCamera
 
-    -- Handle Bomber ESP
-    if states.bomberEsp and zombiesFolder then
-        local currentBombers = {}
-        local children = zombiesFolder:GetChildren()
-
-        for i = 1, #children do
-            local zombie = children[i]
-            local zHum = zombie:FindFirstChildOfClass("Humanoid")
-            if zombie.Parent and zHum and zHum.Health > 0 and isBomber(zombie) then
-                currentBombers[zombie] = true
-
-                if not activeEspBoxes[zombie] or not activeEspBoxes[zombie].Parent then
-                    local box = Instance.new("SelectionBox")
-                    box.Name = getRandomName()
-                    box.Adornee = zombie
-                    box.Color3 = Color3.fromRGB(239, 68, 68)
-                    box.LineThickness = 0.05
-                    box.SurfaceColor3 = Color3.fromRGB(239, 68, 68)
-                    box.SurfaceTransparency = 0.7
-                    box.AlwaysOnTop = true
-                    box.Parent = screenGui
-                    activeEspBoxes[zombie] = box
-                end
-            end
-        end
-
-        for zombie, box in pairs(activeEspBoxes) do
-            if not currentBombers[zombie] then
-                if box and box.Parent then box:Destroy() end
-                activeEspBoxes[zombie] = nil
-            end
-        end
-    else
-        if next(activeEspBoxes) ~= nil then clearEsp() end
-    end
-
     if not hrp or not hum then return end
 
-    -- Priority 1: Bomber Aim Override (Locks onto Torso)
+    -- Priority 1: Bomber Aim Override (ALWAYS Camera Aim onto Torso)
     if states.bomberAim then
         local targetTorso = getNearestBomberTorso(hrp)
         if targetTorso then
             local torsoPos = targetTorso.Position
-
-            if states.aimMode == "Body" then
-                hum.AutoRotate = false
-                local lookAtPos = Vector3.new(torsoPos.X, hrp.Position.Y, torsoPos.Z)
-                if (lookAtPos - hrp.Position).Magnitude > 0.01 then
-                    hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-                end
-            elseif states.aimMode == "Camera" then
-                hum.AutoRotate = true
-                if camera then
-                    camera.CFrame = CFrame.lookAt(camera.CFrame.Position, torsoPos)
-                end
+            if camera then
+                camera.CFrame = CFrame.lookAt(camera.CFrame.Position, torsoPos)
             end
             return
         end
     end
 
-    -- Priority 2: Standard Aim Lock (Locks onto Head within Range)
+    -- Priority 2: Standard Aim Lock
     if states.aimLock then
         local targetHead = getTargetHead(hrp)
         if targetHead then
             local headPos = targetHead.Position
 
             if states.aimMode == "Body" then
+                -- Disable auto-rotate to prevent Shift Lock from counter-rotating the character
                 hum.AutoRotate = false
                 local lookAtPos = Vector3.new(headPos.X, hrp.Position.Y, headPos.Z)
                 if (lookAtPos - hrp.Position).Magnitude > 0.01 then
