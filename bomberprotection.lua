@@ -1,3 +1,4 @@
+-- Unified Precision & Bomber Utility Engine
 local function getService(name)
     local service = game:GetService(name)
     return cloneref and cloneref(service) or service
@@ -11,20 +12,20 @@ local Workspace = getService("Workspace")
 
 local lp = Players.LocalPlayer
 
--- Global State
+-- Global Feature States
 local states = {
+    aimLock = false,
+    aimMode = "Body",
+    aimRange = 5,
+    separateAimBtnVisible = false,
+
     bomberAim = false,
-    separateBtnVisible = false,
-    bomberEsp = false,
-    blastRadius = false,
-    blastRadiusStuds = 4,
-    autoRepel = false,
-    repelDistance = 12
+    separateBomberBtnVisible = false,
+    bomberEsp = false
 }
 
--- Visual Tracking Caches
+-- ESP Tracking Cache
 local activeEspBoxes = {}
-local activeCircles = {}
 
 -- Utility Functions
 local function getRandomName()
@@ -57,140 +58,157 @@ local function applyStroke(obj, color, thickness)
 end
 
 -- Universal Mobile & Desktop Dragging Handler
-local activeDrag = nil
 local function makeDraggable(guiObject, targetFrame)
+    local dragging, dragStart, startPos
+
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            activeDrag = {
-                target = targetFrame,
-                dragStart = input.Position,
-                startPos = targetFrame.Position
-            }
+            dragging = true
+            dragStart = input.Position
+            startPos = targetFrame.Position
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            targetFrame.Position = UDim2.new(
+                startPos.X.Scale, 
+                startPos.X.Offset + delta.X, 
+                startPos.Y.Scale, 
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
         end
     end)
 end
 
-UserInputService.InputChanged:Connect(function(input)
-    if activeDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - activeDrag.dragStart
-        activeDrag.target.Position = UDim2.new(
-            activeDrag.startPos.X.Scale, 
-            activeDrag.startPos.X.Offset + delta.X, 
-            activeDrag.startPos.Y.Scale, 
-            activeDrag.startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if activeDrag and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-        activeDrag = nil
-    end
-end)
-
--- UI Setup
+-- UI Initialization
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = getRandomName()
 screenGui.ResetOnSpawn = false
 screenGui.Parent = getGuiParent()
 
+-- Main Control Frame
 local frame = Instance.new("Frame")
 frame.Name = getRandomName()
-frame.Size = UDim2.new(0, 210, 0, 290)
-frame.Position = UDim2.new(0.5, -105, 0.4, -145)
-frame.BackgroundColor3 = Color3.fromRGB(15, 16, 20)
+frame.Size = UDim2.new(0, 200, 0, 280)
+frame.Position = UDim2.new(0.5, -100, 0.35, -140)
+frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 frame.BorderSizePixel = 0
 frame.Visible = false
 frame.Active = true
 frame.Parent = screenGui
 applyCorner(frame, 6)
-applyStroke(frame, Color3.fromRGB(50, 52, 68), 1)
+applyStroke(frame, Color3.fromRGB(60, 60, 60), 1)
 
+-- Header Bar
 local header = Instance.new("Frame")
-header.Size = UDim2.new(1, 0, 0, 26)
-header.BackgroundColor3 = Color3.fromRGB(22, 24, 31)
+header.Size = UDim2.new(1, 0, 0, 24)
+header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 header.BorderSizePixel = 0
 header.Parent = frame
 applyCorner(header, 6)
 makeDraggable(header, frame)
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -26, 1, 0)
-title.Position = UDim2.new(0, 8, 0, 0)
-title.Text = "OBSIDIAN // BOMBER"
-title.TextColor3 = Color3.fromRGB(239, 68, 68)
-title.Font = Enum.Font.Code
-title.TextSize = 11
+title.Size = UDim2.new(1, -24, 1, 0)
+title.Position = UDim2.new(0, 6, 0, 0)
+title.Text = "Precision Engine"
+title.TextColor3 = Color3.fromRGB(240, 240, 240)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 12
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.BackgroundTransparency = 1
 title.Parent = header
 
 local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 22, 0, 22)
-closeBtn.Position = UDim2.new(1, -24, 0, 2)
-closeBtn.BackgroundColor3 = Color3.fromRGB(30, 32, 42)
+closeBtn.Size = UDim2.new(0, 22, 0, 20)
+closeBtn.Position = UDim2.new(1, -22, 0, 2)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
 closeBtn.BorderSizePixel = 0
-closeBtn.Text = "×"
-closeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-closeBtn.Font = Enum.Font.Code
-closeBtn.TextSize = 14
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 11
 closeBtn.Parent = header
 applyCorner(closeBtn, 4)
 closeBtn.MouseButton1Click:Connect(function() frame.Visible = false end)
 
--- Main Menu Toggle Button
+-- Main Floating Menu Toggle Button
 local menuToggleBtn = Instance.new("TextButton")
 menuToggleBtn.Name = getRandomName()
-menuToggleBtn.Size = UDim2.new(0, 60, 0, 26)
-menuToggleBtn.Position = UDim2.new(0.01, 0, 0.2, 0)
-menuToggleBtn.BackgroundColor3 = Color3.fromRGB(22, 24, 31)
+menuToggleBtn.Size = UDim2.new(0, 50, 0, 24)
+menuToggleBtn.Position = UDim2.new(0.01, 0, 0.18, 0)
+menuToggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 menuToggleBtn.BorderSizePixel = 0
-menuToggleBtn.Text = "BOMBER"
-menuToggleBtn.TextColor3 = Color3.fromRGB(239, 68, 68)
-menuToggleBtn.Font = Enum.Font.Code
-menuToggleBtn.TextSize = 10
+menuToggleBtn.Text = "MENU"
+menuToggleBtn.TextColor3 = Color3.fromRGB(0, 220, 220)
+menuToggleBtn.Font = Enum.Font.SourceSansBold
+menuToggleBtn.TextSize = 11
 menuToggleBtn.Active = true
 menuToggleBtn.Parent = screenGui
 applyCorner(menuToggleBtn, 4)
-applyStroke(menuToggleBtn, Color3.fromRGB(50, 52, 68), 1)
+applyStroke(menuToggleBtn, Color3.fromRGB(80, 80, 80), 1)
 makeDraggable(menuToggleBtn, menuToggleBtn)
+menuToggleBtn.MouseButton1Click:Connect(function() frame.Visible = not frame.Visible end)
 
-menuToggleBtn.MouseButton1Click:Connect(function() 
-    frame.Visible = not frame.Visible 
-end)
-
--- Separate On-Screen Quick Aimlock Toggle Button
+-- Standalone Floating Aimlock Toggle Button
 local quickAimBtn = Instance.new("TextButton")
 quickAimBtn.Name = getRandomName()
-quickAimBtn.Size = UDim2.new(0, 85, 0, 26)
-quickAimBtn.Position = UDim2.new(0.01, 0, 0.26, 0)
-quickAimBtn.BackgroundColor3 = Color3.fromRGB(22, 24, 31)
+quickAimBtn.Size = UDim2.new(0, 60, 0, 24)
+quickAimBtn.Position = UDim2.new(0.01, 0, 0.23, 0)
+quickAimBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 quickAimBtn.BorderSizePixel = 0
-quickAimBtn.Text = "BOMBER AIM: OFF"
-quickAimBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
-quickAimBtn.Font = Enum.Font.Code
-quickAimBtn.TextSize = 9
+quickAimBtn.Text = "AIM: OFF"
+quickAimBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+quickAimBtn.Font = Enum.Font.SourceSansBold
+quickAimBtn.TextSize = 10
 quickAimBtn.Active = true
 quickAimBtn.Visible = false
 quickAimBtn.Parent = screenGui
 applyCorner(quickAimBtn, 4)
-applyStroke(quickAimBtn, Color3.fromRGB(50, 52, 68), 1)
+applyStroke(quickAimBtn, Color3.fromRGB(80, 80, 80), 1)
 makeDraggable(quickAimBtn, quickAimBtn)
 
+-- Standalone Floating Bomber Aim Toggle Button
+local quickBomberBtn = Instance.new("TextButton")
+quickBomberBtn.Name = getRandomName()
+quickBomberBtn.Size = UDim2.new(0, 85, 0, 24)
+quickBomberBtn.Position = UDim2.new(0.01, 0, 0.28, 0)
+quickBomberBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+quickBomberBtn.BorderSizePixel = 0
+quickBomberBtn.Text = "BOMBER AIM: OFF"
+quickBomberBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+quickBomberBtn.Font = Enum.Font.SourceSansBold
+quickBomberBtn.TextSize = 10
+quickBomberBtn.Active = true
+quickBomberBtn.Visible = false
+quickBomberBtn.Parent = screenGui
+applyCorner(quickBomberBtn, 4)
+applyStroke(quickBomberBtn, Color3.fromRGB(80, 80, 80), 1)
+makeDraggable(quickBomberBtn, quickBomberBtn)
+
+-- Dynamic Button Generator Helper
 local function createToggleBtn(text, pos, onClick)
     local btn = Instance.new("TextButton")
     btn.Name = getRandomName()
-    btn.Size = UDim2.new(1, -12, 0, 24)
+    btn.Size = UDim2.new(1, -10, 0, 22)
     btn.Position = pos
-    btn.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
+    btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     btn.BorderSizePixel = 0
     btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(160, 165, 180)
-    btn.Font = Enum.Font.Code
-    btn.TextSize = 10
+    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 11
     btn.Parent = frame
     applyCorner(btn, 4)
-    applyStroke(btn, Color3.fromRGB(38, 40, 52), 1)
+    applyStroke(btn, Color3.fromRGB(60, 60, 60), 1)
     btn.MouseButton1Click:Connect(function() onClick(btn) end)
     return btn
 end
@@ -202,129 +220,173 @@ local function clearEsp()
     table.clear(activeEspBoxes)
 end
 
-local function clearCircles()
-    for _, circle in pairs(activeCircles) do
-        if circle and circle.Parent then circle:Destroy() end
-    end
-    table.clear(activeCircles)
-end
-
--- Controls Integration
+-- Synchronized Aim Controllers
 local mainAimBtn
+local mainBomberBtn
 
-local function setBomberAimState(enabled)
-    states.bomberAim = enabled
-    local stateTxt = states.bomberAim and "ON" or "OFF"
-    local activeColor = states.bomberAim and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(160, 165, 180)
+local function setAimlockState(enabled)
+    states.aimLock = enabled
+    local stateTxt = states.aimLock and "ON" or "OFF"
+    local activeColor = states.aimLock and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
 
     if mainAimBtn then
-        mainAimBtn.Text = "Bomber Aimlock: " .. stateTxt
+        mainAimBtn.Text = "Aim Lock: " .. stateTxt
         mainAimBtn.TextColor3 = activeColor
     end
 
-    quickAimBtn.Text = "BOMBER AIM: " .. stateTxt
+    quickAimBtn.Text = "AIM: " .. stateTxt
     quickAimBtn.TextColor3 = activeColor
 
-    if not states.bomberAim then
+    if not states.aimLock and not states.bomberAim then
         local char = lp.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if hum then hum.AutoRotate = true end
     end
 end
 
-mainAimBtn = createToggleBtn("Bomber Aimlock: OFF", UDim2.new(0, 6, 0, 32), function()
-    setBomberAimState(not states.bomberAim)
+local function setBomberAimState(enabled)
+    states.bomberAim = enabled
+    local stateTxt = states.bomberAim and "ON" or "OFF"
+    local activeColor = states.bomberAim and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(200, 200, 200)
+
+    if mainBomberBtn then
+        mainBomberBtn.Text = "Bomber Aimlock: " .. stateTxt
+        mainBomberBtn.TextColor3 = activeColor
+    end
+
+    quickBomberBtn.Text = "BOMBER: " .. stateTxt
+    quickBomberBtn.TextColor3 = activeColor
+
+    if not states.aimLock and not states.bomberAim then
+        local char = lp.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.AutoRotate = true end
+    end
+end
+
+-- GUI Controls Creation
+mainAimBtn = createToggleBtn("Aim Lock: OFF", UDim2.new(0, 5, 0, 28), function()
+    setAimlockState(not states.aimLock)
 end)
 
 quickAimBtn.MouseButton1Click:Connect(function()
+    setAimlockState(not states.aimLock)
+end)
+
+createToggleBtn("Aim Lock Button: OFF", UDim2.new(0, 5, 0, 54), function(btn)
+    states.separateAimBtnVisible = not states.separateAimBtnVisible
+    quickAimBtn.Visible = states.separateAimBtnVisible
+    btn.Text = "Aim Lock Button: " .. (states.separateAimBtnVisible and "ON" or "OFF")
+    btn.TextColor3 = states.separateAimBtnVisible and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
+end)
+
+mainBomberBtn = createToggleBtn("Bomber Aimlock: OFF", UDim2.new(0, 5, 0, 80), function()
     setBomberAimState(not states.bomberAim)
 end)
 
-createToggleBtn("Separate Aim Button: OFF", UDim2.new(0, 6, 0, 60), function(btn)
-    states.separateBtnVisible = not states.separateBtnVisible
-    quickAimBtn.Visible = states.separateBtnVisible
-    btn.Text = "Separate Aim Button: " .. (states.separateBtnVisible and "ON" or "OFF")
-    btn.TextColor3 = states.separateBtnVisible and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(160, 165, 180)
+quickBomberBtn.MouseButton1Click:Connect(function()
+    setBomberAimState(not states.bomberAim)
 end)
 
-createToggleBtn("Bomber ESP: OFF", UDim2.new(0, 6, 0, 88), function(btn)
+createToggleBtn("Bomber Button: OFF", UDim2.new(0, 5, 0, 106), function(btn)
+    states.separateBomberBtnVisible = not states.separateBomberBtnVisible
+    quickBomberBtn.Visible = states.separateBomberBtnVisible
+    btn.Text = "Bomber Button: " .. (states.separateBomberBtnVisible and "ON" or "OFF")
+    btn.TextColor3 = states.separateBomberBtnVisible and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
+end)
+
+createToggleBtn("Bomber ESP: OFF", UDim2.new(0, 5, 0, 132), function(btn)
     states.bomberEsp = not states.bomberEsp
     btn.Text = "Bomber ESP: " .. (states.bomberEsp and "ON" or "OFF")
-    btn.TextColor3 = states.bomberEsp and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(160, 165, 180)
+    btn.TextColor3 = states.bomberEsp and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(200, 200, 200)
     if not states.bomberEsp then clearEsp() end
 end)
 
-createToggleBtn("Blast Indicator: OFF", UDim2.new(0, 6, 0, 116), function(btn)
-    states.blastRadius = not states.blastRadius
-    btn.Text = "Blast Indicator: " .. (states.blastRadius and "ON" or "OFF")
-    btn.TextColor3 = states.blastRadius and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(160, 165, 180)
-    if not states.blastRadius then clearCircles() end
-end)
+-- Custom Aim Range Container
+local rangeContainer = Instance.new("Frame")
+rangeContainer.Size = UDim2.new(1, -10, 0, 22)
+rangeContainer.Position = UDim2.new(0, 5, 0, 158)
+rangeContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+rangeContainer.BorderSizePixel = 0
+rangeContainer.Parent = frame
+applyCorner(rangeContainer, 4)
+applyStroke(rangeContainer, Color3.fromRGB(60, 60, 60), 1)
 
--- Blast Radius Input Box
-local radiusBox = Instance.new("TextBox")
-radiusBox.Name = getRandomName()
-radiusBox.Size = UDim2.new(1, -12, 0, 24)
-radiusBox.Position = UDim2.new(0, 6, 0, 144)
-radiusBox.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
-radiusBox.BorderSizePixel = 0
-radiusBox.Text = "Indicator Studs: 4"
-radiusBox.PlaceholderText = "Indicator Radius..."
-radiusBox.TextColor3 = Color3.fromRGB(160, 165, 180)
-radiusBox.Font = Enum.Font.Code
-radiusBox.TextSize = 10
-radiusBox.ClearTextOnFocus = false
-radiusBox.Parent = frame
-applyCorner(radiusBox, 4)
-applyStroke(radiusBox, Color3.fromRGB(38, 40, 52), 1)
+local rangeLabel = Instance.new("TextLabel")
+rangeLabel.Size = UDim2.new(0.65, 0, 1, 0)
+rangeLabel.Position = UDim2.new(0, 4, 0, 0)
+rangeLabel.Text = "Aim Range (Studs):"
+rangeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+rangeLabel.Font = Enum.Font.SourceSans
+rangeLabel.TextSize = 11
+rangeLabel.TextXAlignment = Enum.TextXAlignment.Left
+rangeLabel.BackgroundTransparency = 1
+rangeLabel.Parent = rangeContainer
 
-radiusBox.FocusLost:Connect(function()
-    local val = tonumber(radiusBox.Text:match("%d+"))
-    if val then
-        states.blastRadiusStuds = val
-        radiusBox.Text = "Indicator Studs: " .. tostring(val)
-        for _, circle in pairs(activeCircles) do
-            if circle then circle.Radius = val end
-        end
+local rangeBox = Instance.new("TextBox")
+rangeBox.Size = UDim2.new(0.3, 0, 1, -4)
+rangeBox.Position = UDim2.new(0.67, 0, 0, 2)
+rangeBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+rangeBox.BorderSizePixel = 0
+rangeBox.Text = "5"
+rangeBox.TextColor3 = Color3.fromRGB(0, 220, 220)
+rangeBox.Font = Enum.Font.SourceSansBold
+rangeBox.TextSize = 11
+rangeBox.ClearTextOnFocus = false
+rangeBox.Parent = rangeContainer
+applyCorner(rangeBox, 3)
+
+rangeBox.FocusLost:Connect(function()
+    local val = tonumber(rangeBox.Text)
+    if val and val > 0 then
+        states.aimRange = val
     else
-        radiusBox.Text = "Indicator Studs: " .. tostring(states.blastRadiusStuds)
+        rangeBox.Text = tostring(states.aimRange)
     end
 end)
 
-createToggleBtn("Backwalk Repel: OFF", UDim2.new(0, 6, 0, 172), function(btn)
-    states.autoRepel = not states.autoRepel
-    btn.Text = "Backwalk Repel: " .. (states.autoRepel and "ON" or "OFF")
-    btn.TextColor3 = states.autoRepel and Color3.fromRGB(239, 68, 68) or Color3.fromRGB(160, 165, 180)
+-- Aim Mode Switcher
+createToggleBtn("Aim Mode: Body", UDim2.new(0, 5, 0, 184), function(btn)
+    states.aimMode = (states.aimMode == "Body") and "Camera" or "Body"
+    btn.Text = "Aim Mode: " .. states.aimMode
+
+    local char = lp.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.AutoRotate = true end
 end)
 
--- Repel Range Input Box
-local repelBox = Instance.new("TextBox")
-repelBox.Name = getRandomName()
-repelBox.Size = UDim2.new(1, -12, 0, 24)
-repelBox.Position = UDim2.new(0, 6, 0, 200)
-repelBox.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
-repelBox.BorderSizePixel = 0
-repelBox.Text = "Repel Studs: 12"
-repelBox.PlaceholderText = "Repel Range..."
-repelBox.TextColor3 = Color3.fromRGB(160, 165, 180)
-repelBox.Font = Enum.Font.Code
-repelBox.TextSize = 10
-repelBox.ClearTextOnFocus = false
-repelBox.Parent = frame
-applyCorner(repelBox, 4)
-applyStroke(repelBox, Color3.fromRGB(38, 40, 52), 1)
+-- Unload Script
+local mainLoopConnection
+local disableBtn = Instance.new("TextButton")
+disableBtn.Name = getRandomName()
+disableBtn.Size = UDim2.new(1, -10, 0, 22)
+disableBtn.Position = UDim2.new(0, 5, 0, 210)
+disableBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+disableBtn.BorderSizePixel = 0
+disableBtn.Text = "UNLOAD SCRIPT"
+disableBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+disableBtn.Font = Enum.Font.SourceSansBold
+disableBtn.TextSize = 11
+disableBtn.Parent = frame
+applyCorner(disableBtn, 4)
 
-repelBox.FocusLost:Connect(function()
-    local val = tonumber(repelBox.Text:match("%d+"))
-    if val then
-        states.repelDistance = val
-        repelBox.Text = "Repel Studs: " .. tostring(val)
-    else
-        repelBox.Text = "Repel Studs: " .. tostring(states.repelDistance)
+disableBtn.MouseButton1Click:Connect(function()
+    if mainLoopConnection then
+        mainLoopConnection:Disconnect()
+        mainLoopConnection = nil
     end
+
+    if lp then
+        local char = lp.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.AutoRotate = true end
+    end
+
+    clearEsp()
+    screenGui:Destroy()
 end)
 
--- Bomber Identification Algorithm
+-- Strict Bomber Identification Algorithm
 local function isBomber(zombie)
     if not zombie then return false end
     local zType = tostring(zombie:GetAttribute("Type") or "")
@@ -344,23 +406,20 @@ local function isBomber(zombie)
     return false
 end
 
--- Target Acquisition Engine
-local function getNearestBomber(hrp)
+-- General Target Acquisition (Head)
+local function getTargetHead(hrp)
     local zombiesFolder = Workspace:FindFirstChild("Zombies")
     if not zombiesFolder then return nil end
 
     local closestHead = nil
-    local shortestDist = math.huge
-    local children = zombiesFolder:GetChildren()
+    local shortestDist = states.aimRange
 
-    for i = 1, #children do
-        local zombie = children[i]
-        local zHum = zombie:FindFirstChildOfClass("Humanoid")
-        if zombie.Parent and zHum and zHum.Health > 0 and isBomber(zombie) then
+    for _, zombie in ipairs(zombiesFolder:GetChildren()) do
+        if not isBomber(zombie) then
             local zHead = zombie:FindFirstChild("Head") or zombie:FindFirstChild("HumanoidRootPart")
-            if zHead then
+            if zHead and zombie.Parent then
                 local dist = (hrp.Position - zHead.Position).Magnitude
-                if dist < shortestDist then
+                if dist <= shortestDist then
                     shortestDist = dist
                     closestHead = zHead
                 end
@@ -371,39 +430,32 @@ local function getNearestBomber(hrp)
     return closestHead
 end
 
--- Unload Button Initialization
-local mainLoopConnection
+-- Bomber Target Acquisition (Torso / HumanoidRootPart)
+local function getNearestBomberTorso(hrp)
+    local zombiesFolder = Workspace:FindFirstChild("Zombies")
+    if not zombiesFolder then return nil end
 
-local disableBtn = Instance.new("TextButton")
-disableBtn.Name = getRandomName()
-disableBtn.Size = UDim2.new(1, -12, 0, 24)
-disableBtn.Position = UDim2.new(0, 6, 0, 238)
-disableBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 25)
-disableBtn.BorderSizePixel = 0
-disableBtn.Text = "UNLOAD SCRIPT"
-disableBtn.TextColor3 = Color3.fromRGB(244, 63, 94)
-disableBtn.Font = Enum.Font.Code
-disableBtn.TextSize = 10
-disableBtn.Parent = frame
-applyCorner(disableBtn, 4)
-applyStroke(disableBtn, Color3.fromRGB(80, 30, 40), 1)
+    local closestTorso = nil
+    local shortestDist = math.huge
 
-disableBtn.MouseButton1Click:Connect(function()
-    if mainLoopConnection then
-        mainLoopConnection:Disconnect()
-        mainLoopConnection = nil
+    for _, zombie in ipairs(zombiesFolder:GetChildren()) do
+        local zHum = zombie:FindFirstChildOfClass("Humanoid")
+        if zombie.Parent and zHum and zHum.Health > 0 and isBomber(zombie) then
+            local zTorso = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("UpperTorso") or zombie:FindFirstChild("Torso")
+            if zTorso then
+                local dist = (hrp.Position - zTorso.Position).Magnitude
+                if dist < shortestDist then
+                    shortestDist = dist
+                    closestTorso = zTorso
+                end
+            end
+        end
     end
 
-    local char = lp.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then hum.AutoRotate = true end
+    return closestTorso
+end
 
-    clearEsp()
-    clearCircles()
-    screenGui:Destroy()
-end)
-
--- Main Loop
+-- Optimized RenderStepped Main Processing Loop
 mainLoopConnection = RunService.RenderStepped:Connect(function()
     local zombiesFolder = Workspace:FindFirstChild("Zombies")
     local char = lp.Character
@@ -411,123 +463,88 @@ mainLoopConnection = RunService.RenderStepped:Connect(function()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local camera = Workspace.CurrentCamera
 
-    local currentBombers = {}
-
-    if zombiesFolder then
+    -- Handle Bomber ESP
+    if states.bomberEsp and zombiesFolder then
+        local currentBombers = {}
         local children = zombiesFolder:GetChildren()
+
         for i = 1, #children do
             local zombie = children[i]
             local zHum = zombie:FindFirstChildOfClass("Humanoid")
             if zombie.Parent and zHum and zHum.Health > 0 and isBomber(zombie) then
                 currentBombers[zombie] = true
 
-                -- Selection Box ESP
-                if states.bomberEsp then
-                    if not activeEspBoxes[zombie] or not activeEspBoxes[zombie].Parent then
-                        local box = Instance.new("SelectionBox")
-                        box.Name = getRandomName()
-                        box.Adornee = zombie
-                        box.Color3 = Color3.fromRGB(239, 68, 68)
-                        box.LineThickness = 0.05
-                        box.SurfaceColor3 = Color3.fromRGB(239, 68, 68)
-                        box.SurfaceTransparency = 0.7
-                        box.AlwaysOnTop = true
-                        box.Parent = screenGui
-                        activeEspBoxes[zombie] = box
-                    end
-                end
-
-                -- Adjustable Blast Indicator
-                if states.blastRadius then
-                    local zHrp = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("Head")
-                    if zHrp and (not activeCircles[zombie] or not activeCircles[zombie].Parent) then
-                        local circle = Instance.new("CylinderHandleAdornment")
-                        circle.Name = getRandomName()
-                        circle.Adornee = zHrp
-                        circle.Height = 0.1
-                        circle.Radius = states.blastRadiusStuds
-                        circle.Color3 = Color3.fromRGB(239, 68, 68)
-                        circle.Transparency = 0.4
-                        circle.CFrame = CFrame.Angles(math.rad(90), 0, 0)
-                        circle.AlwaysOnTop = true
-                        circle.Parent = screenGui
-                        activeCircles[zombie] = circle
-                    end
+                if not activeEspBoxes[zombie] or not activeEspBoxes[zombie].Parent then
+                    local box = Instance.new("SelectionBox")
+                    box.Name = getRandomName()
+                    box.Adornee = zombie
+                    box.Color3 = Color3.fromRGB(239, 68, 68)
+                    box.LineThickness = 0.05
+                    box.SurfaceColor3 = Color3.fromRGB(239, 68, 68)
+                    box.SurfaceTransparency = 0.7
+                    box.AlwaysOnTop = true
+                    box.Parent = screenGui
+                    activeEspBoxes[zombie] = box
                 end
             end
         end
-    end
 
-    -- Cleanup Visual Caches
-    for zombie, box in pairs(activeEspBoxes) do
-        if not currentBombers[zombie] then
-            if box and box.Parent then box:Destroy() end
-            activeEspBoxes[zombie] = nil
+        for zombie, box in pairs(activeEspBoxes) do
+            if not currentBombers[zombie] then
+                if box and box.Parent then box:Destroy() end
+                activeEspBoxes[zombie] = nil
+            end
         end
+    else
+        if next(activeEspBoxes) ~= nil then clearEsp() end
     end
-
-    for zombie, circle in pairs(activeCircles) do
-        if not currentBombers[zombie] then
-            if circle and circle.Parent then circle:Destroy() end
-            activeCircles[zombie] = nil
-        end
-    end
-
-    if not states.bomberEsp then clearEsp() end
-    if not states.blastRadius then clearCircles() end
 
     if not hrp or not hum then return end
 
-    -- Smooth Physical Backwalk Movement Repel Engine
-    if states.autoRepel then
-        local threatVector = Vector3.zero
-        local inRangeCount = 0
+    -- Priority 1: Bomber Aim Override (Locks onto Torso)
+    if states.bomberAim then
+        local targetTorso = getNearestBomberTorso(hrp)
+        if targetTorso then
+            local torsoPos = targetTorso.Position
 
-        for zombie in pairs(currentBombers) do
-            local zHrp = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("Head")
-            if zHrp then
-                local flatHrpPos = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
-                local flatZHrpPos = Vector3.new(zHrp.Position.X, 0, zHrp.Position.Z)
-                local distVec = flatHrpPos - flatZHrpPos
-                local dist = distVec.Magnitude
-
-                if dist < states.repelDistance and dist > 0.001 then
-                    threatVector = threatVector + (distVec.Unit * (states.repelDistance - dist))
-                    inRangeCount = inRangeCount + 1
+            if states.aimMode == "Body" then
+                hum.AutoRotate = false
+                local lookAtPos = Vector3.new(torsoPos.X, hrp.Position.Y, torsoPos.Z)
+                if (lookAtPos - hrp.Position).Magnitude > 0.01 then
+                    hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
+                end
+            elseif states.aimMode == "Camera" then
+                hum.AutoRotate = true
+                if camera then
+                    camera.CFrame = CFrame.lookAt(camera.CFrame.Position, torsoPos)
                 end
             end
-        end
-
-        if inRangeCount > 0 and threatVector.Magnitude > 0.001 then
-            local moveDirection = threatVector.Unit
-            hum:Move(moveDirection, false)
+            return
         end
     end
 
-    -- Bomber Aimlock
-    if states.bomberAim then
-        local targetHead = getNearestBomber(hrp)
+    -- Priority 2: Standard Aim Lock (Locks onto Head within Range)
+    if states.aimLock then
+        local targetHead = getTargetHead(hrp)
         if targetHead then
             local headPos = targetHead.Position
-            local isShiftLock = UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
 
-            if isShiftLock then
-                hum.AutoRotate = true
-                if camera then
-                    camera.CFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
-                end
-            else
+            if states.aimMode == "Body" then
                 hum.AutoRotate = false
                 local lookAtPos = Vector3.new(headPos.X, hrp.Position.Y, headPos.Z)
                 if (lookAtPos - hrp.Position).Magnitude > 0.01 then
                     hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
                 end
+            elseif states.aimMode == "Camera" then
+                hum.AutoRotate = true
                 if camera then
                     camera.CFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
                 end
             end
-        else
-            hum.AutoRotate = true
+            return
         end
     end
+
+    -- Reset AutoRotate when no target is acquired or when aim features are toggled off
+    hum.AutoRotate = true
 end)
