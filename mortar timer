@@ -1,0 +1,462 @@
+-- Hand Mortar HUD Engine (Dynamic Fuse Timers & Multi-Mode Auto-Click)
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local RELOAD_DURATION = 7.65
+local FUSE_DURATION = 5.80
+
+local primaryAutoClickTime = 0.25
+local secondaryAutoClickTime = 0.10
+local activeAutoClickTime = 0.25
+
+local autoClickEnabled = false
+local secondaryTimerEnabled = false
+local isUsingSecondary = false
+local isMenuOpen = false
+local isReloading = false
+local isFuseLit = false
+
+--------------------------------------------------------------------------------
+-- SAFE GUI ROOT
+--------------------------------------------------------------------------------
+
+if PlayerGui:FindFirstChild("MortarTextGui") then
+    PlayerGui.MortarTextGui:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MortarTextGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+if gethui then
+    ScreenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = CoreGui
+else
+    ScreenGui.Parent = PlayerGui
+end
+
+--------------------------------------------------------------------------------
+-- DRAG SYSTEM
+--------------------------------------------------------------------------------
+
+local function makeDraggable(frame, handle, conditionFunc)
+    local dragging, dragInput, dragStart, startPos
+
+    handle.InputBegan:Connect(function(input)
+        if conditionFunc and not conditionFunc() then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    handle.InputChanged:Connect(function(input)
+        if conditionFunc and not conditionFunc() then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            if conditionFunc and not conditionFunc() then 
+                dragging = false 
+                return 
+            end
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- SLIM PROGRESS BARS & LABELS
+--------------------------------------------------------------------------------
+
+local function createTimerBar(name, defaultPos, labelText)
+    local Frame = Instance.new("Frame")
+    Frame.Name = name .. "Display"
+    Frame.Size = UDim2.new(0, 110, 0, 16)
+    Frame.Position = defaultPos
+    Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    Frame.BorderSizePixel = 0
+    Frame.Active = true
+    Frame.ClipsDescendants = true
+    Frame.Parent = ScreenGui
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 3)
+    Corner.Parent = Frame
+
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Name = "BorderStroke"
+    Stroke.Color = Color3.fromRGB(50, 50, 60)
+    Stroke.Thickness = 1
+    Stroke.Parent = Frame
+
+    local FillBar = Instance.new("Frame")
+    FillBar.Name = "FillBar"
+    FillBar.Size = UDim2.new(0, 0, 1, 0)
+    FillBar.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+    FillBar.BorderSizePixel = 0
+    FillBar.Parent = Frame
+
+    local FillCorner = Instance.new("UICorner")
+    FillCorner.CornerRadius = UDim.new(0, 3)
+    FillCorner.Parent = FillBar
+
+    local Label = Instance.new("TextLabel")
+    Label.Name = "Label"
+    Label.Size = UDim2.new(1, 0, 1, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = labelText .. ": READY"
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = 10
+    Label.Font = Enum.Font.GothamBold
+    Label.ZIndex = 2
+    Label.Parent = Frame
+
+    makeDraggable(Frame, Frame, function() return isMenuOpen end)
+
+    return Frame, Label, FillBar, Stroke
+end
+
+local ReloadFrame, ReloadText, ReloadFill, ReloadStroke = createTimerBar("Reload", UDim2.new(0.5, -115, 0.2, 0), "RELOAD")
+local FuseFrame, FuseText, FuseFill, FuseStroke = createTimerBar("Fuse", UDim2.new(0.5, 5, 0.2, 0), "FUSE")
+
+--------------------------------------------------------------------------------
+-- AUTO CLICK POINTER & SWAP BUTTON
+--------------------------------------------------------------------------------
+
+local Pointer = Instance.new("Frame")
+Pointer.Name = "AutoClickPointer"
+Pointer.Size = UDim2.new(0, 16, 0, 16)
+Pointer.Position = UDim2.new(0.5, -8, 0.5, -8)
+Pointer.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+Pointer.BackgroundTransparency = 0.3
+Pointer.BorderSizePixel = 0
+Pointer.Visible = false
+Pointer.Active = true
+Pointer.Parent = ScreenGui
+
+local PointerCorner = Instance.new("UICorner")
+PointerCorner.CornerRadius = UDim.new(1, 0)
+PointerCorner.Parent = Pointer
+
+local PointerStroke = Instance.new("UIStroke")
+PointerStroke.Color = Color3.fromRGB(255, 255, 255)
+PointerStroke.Thickness = 1.5
+PointerStroke.Parent = Pointer
+
+makeDraggable(Pointer, Pointer, function() return isMenuOpen end)
+
+local QuickSwapBtn = Instance.new("TextButton")
+QuickSwapBtn.Name = "QuickSwapBtn"
+QuickSwapBtn.Size = UDim2.new(0, 24, 0, 24)
+QuickSwapBtn.Position = UDim2.new(0.05, 30, 0.3, 0)
+QuickSwapBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+QuickSwapBtn.Text = "T1"
+QuickSwapBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+QuickSwapBtn.TextSize = 9
+QuickSwapBtn.Font = Enum.Font.GothamBold
+QuickSwapBtn.Visible = false
+QuickSwapBtn.Active = true
+QuickSwapBtn.Parent = ScreenGui
+
+local SwapCorner = Instance.new("UICorner")
+SwapCorner.CornerRadius = UDim.new(0, 4)
+SwapCorner.Parent = QuickSwapBtn
+
+local SwapStroke = Instance.new("UIStroke")
+SwapStroke.Color = Color3.fromRGB(70, 70, 85)
+SwapStroke.Thickness = 1
+SwapStroke.Parent = QuickSwapBtn
+
+makeDraggable(QuickSwapBtn, QuickSwapBtn, function() return isMenuOpen end)
+
+local function updateActiveTime()
+    if isUsingSecondary then
+        activeAutoClickTime = secondaryAutoClickTime
+        QuickSwapBtn.Text = "T2"
+        QuickSwapBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
+    else
+        activeAutoClickTime = primaryAutoClickTime
+        QuickSwapBtn.Text = "T1"
+        QuickSwapBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    end
+end
+
+QuickSwapBtn.MouseButton1Click:Connect(function()
+    isUsingSecondary = not isUsingSecondary
+    updateActiveTime()
+end)
+
+local function triggerAutoClick()
+    local x = Pointer.AbsolutePosition.X + (Pointer.AbsoluteSize.X / 2)
+    local y = Pointer.AbsolutePosition.Y + (Pointer.AbsoluteSize.Y / 2) + 36
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+    task.wait(0.02)
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+end
+
+--------------------------------------------------------------------------------
+-- MINIMAL MENU CONTROL
+--------------------------------------------------------------------------------
+
+local MenuBtn = Instance.new("TextButton")
+MenuBtn.Name = "MortarMenuBtn"
+MenuBtn.Size = UDim2.new(0, 24, 0, 24)
+MenuBtn.Position = UDim2.new(0.05, 0, 0.3, 0)
+MenuBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MenuBtn.Text = "⚙"
+MenuBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+MenuBtn.TextSize = 12
+MenuBtn.Parent = ScreenGui
+
+local MenuBtnCorner = Instance.new("UICorner")
+MenuBtnCorner.CornerRadius = UDim.new(0, 4)
+MenuBtnCorner.Parent = MenuBtn
+
+makeDraggable(MenuBtn, MenuBtn, function() return true end)
+
+local MainMenu = Instance.new("Frame")
+MainMenu.Name = "MainMenu"
+MainMenu.Size = UDim2.new(0, 160, 0, 200)
+MainMenu.Position = UDim2.new(0.5, -80, 0.35, 0)
+MainMenu.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainMenu.BorderSizePixel = 0
+MainMenu.Visible = false
+MainMenu.Active = true
+MainMenu.Parent = ScreenGui
+
+local MainMenuCorner = Instance.new("UICorner")
+MainMenuCorner.CornerRadius = UDim.new(0, 6)
+MainMenuCorner.Parent = MainMenu
+
+local MenuTitle = Instance.new("TextLabel")
+MenuTitle.Size = UDim2.new(1, 0, 0, 22)
+MenuTitle.BackgroundTransparency = 1
+MenuTitle.Text = "MORTAR MENU"
+MenuTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+MenuTitle.TextSize = 9
+MenuTitle.Font = Enum.Font.GothamBold
+MenuTitle.Parent = MainMenu
+
+makeDraggable(MainMenu, MenuTitle, function() return true end)
+
+local function createToggleBtn(posY, labelText, defaultState, onToggle)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, -16, 0, 22)
+    Btn.Position = UDim2.new(0, 8, 0, posY)
+    Btn.BackgroundColor3 = defaultState and Color3.fromRGB(40, 140, 70) or Color3.fromRGB(140, 40, 40)
+    Btn.Text = labelText .. (defaultState and ": ON" or ": OFF")
+    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Btn.TextSize = 8
+    Btn.Font = Enum.Font.GothamBold
+    Btn.Parent = MainMenu
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 4)
+    Corner.Parent = Btn
+
+    local state = defaultState
+    Btn.MouseButton1Click:Connect(function()
+        state = not state
+        Btn.BackgroundColor3 = state and Color3.fromRGB(40, 140, 70) or Color3.fromRGB(140, 40, 40)
+        Btn.Text = labelText .. (state and ": ON" or ": OFF")
+        onToggle(state)
+    end)
+    return Btn
+end
+
+local function createInputBar(posY, labelText, defaultValue, onValueChange)
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -16, 0, 22)
+    Container.Position = UDim2.new(0, 8, 0, posY)
+    Container.BackgroundTransparency = 1
+    Container.Parent = MainMenu
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.65, 0, 1, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = labelText
+    Label.TextColor3 = Color3.fromRGB(180, 180, 190)
+    Label.TextSize = 8
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Font = Enum.Font.Gotham
+    Label.Parent = Container
+
+    local Box = Instance.new("TextBox")
+    Box.Size = UDim2.new(0.35, 0, 1, 0)
+    Box.Position = UDim2.new(0.65, 0, 0, 0)
+    Box.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    Box.Text = tostring(defaultValue)
+    Box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Box.TextSize = 8
+    Box.Font = Enum.Font.GothamBold
+    Box.Parent = Container
+
+    local BoxCorner = Instance.new("UICorner")
+    BoxCorner.CornerRadius = UDim.new(0, 4)
+    BoxCorner.Parent = Box
+
+    Box.FocusLost:Connect(function()
+        local num = tonumber(Box.Text)
+        if num then
+            onValueChange(num)
+        else
+            Box.Text = tostring(defaultValue)
+        end
+    end)
+end
+
+createToggleBtn(24, "RELOAD TIMER", true, function(v) ReloadFrame.Visible = v end)
+createToggleBtn(50, "FUSE TIMER", true, function(v) FuseFrame.Visible = v end)
+createToggleBtn(76, "AUTO CLICK", false, function(v) 
+    autoClickEnabled = v 
+    Pointer.Visible = v
+end)
+
+createInputBar(102, "T1 TIME (s):", primaryAutoClickTime, function(val)
+    primaryAutoClickTime = val
+    updateActiveTime()
+end)
+
+createToggleBtn(128, "2ND TIMER BTN", false, function(v)
+    secondaryTimerEnabled = v
+    QuickSwapBtn.Visible = v
+    if not v then
+        isUsingSecondary = false
+        updateActiveTime()
+    end
+end)
+
+createInputBar(154, "T2 TIME (s):", secondaryAutoClickTime, function(val)
+    secondaryAutoClickTime = val
+    updateActiveTime()
+end)
+
+MenuBtn.MouseButton1Click:Connect(function()
+    isMenuOpen = not isMenuOpen
+    MainMenu.Visible = isMenuOpen
+    local col = isMenuOpen and Color3.fromRGB(200, 160, 40) or Color3.fromRGB(50, 50, 60)
+    ReloadStroke.Color = col
+    FuseStroke.Color = col
+    SwapStroke.Color = isMenuOpen and Color3.fromRGB(200, 160, 40) or Color3.fromRGB(70, 70, 85)
+    PointerStroke.Color = isMenuOpen and Color3.fromRGB(250, 200, 50) or Color3.fromRGB(255, 255, 255)
+end)
+
+--------------------------------------------------------------------------------
+-- COUNTDOWN ENGINE
+--------------------------------------------------------------------------------
+
+local function triggerReload()
+    if isReloading then return end
+    isReloading = true
+    
+    ReloadText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ReloadFill.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+    local startTime = os.clock()
+    
+    task.spawn(function()
+        while true do
+            local elapsed = os.clock() - startTime
+            local remaining = math.max(0, RELOAD_DURATION - elapsed)
+            local progress = math.clamp(elapsed / RELOAD_DURATION, 0, 1)
+
+            ReloadText.Text = string.format("RELOAD: %.2fs", remaining)
+            ReloadFill.Size = UDim2.new(progress, 0, 1, 0)
+
+            if remaining <= 0 then break end
+            task.wait()
+        end
+
+        ReloadText.Text = "RELOAD: READY"
+        ReloadFill.Size = UDim2.new(0, 0, 1, 0)
+        isReloading = false
+    end)
+end
+
+local function triggerFuse()
+    if isFuseLit then return end
+    isFuseLit = true
+    
+    FuseText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    FuseFill.BackgroundColor3 = Color3.fromRGB(180, 80, 40)
+    local startTime = os.clock()
+    local clicked = false
+    
+    task.spawn(function()
+        while true do
+            local elapsed = os.clock() - startTime
+            local remaining = math.max(0, FUSE_DURATION - elapsed)
+            local progress = math.clamp(elapsed / FUSE_DURATION, 0, 1)
+
+            FuseText.Text = string.format("FUSE: %.2fs", remaining)
+            FuseFill.Size = UDim2.new(progress, 0, 1, 0)
+
+            if autoClickEnabled and not clicked and remaining <= activeAutoClickTime then
+                clicked = true
+                triggerAutoClick()
+            end
+
+            if remaining <= 0 then break end
+            task.wait()
+        end
+
+        FuseText.Text = "FUSE: READY"
+        FuseFill.Size = UDim2.new(0, 0, 1, 0)
+        isFuseLit = false
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- DETECTORS
+--------------------------------------------------------------------------------
+
+local function setupAnimationTracker(char)
+    local humanoid = char:WaitForChild("Humanoid", 5)
+    if not humanoid then return end
+
+    humanoid.AnimationPlayed:Connect(function(track)
+        local animName = track.Name
+        if animName == "ReloadP1" then
+            triggerReload()
+        elseif animName == "Ignite" or animName == "IgniteAim" or animName == "StrikeFlint" or animName == "Aim" or animName == "Aiming" then
+            triggerFuse()
+        end
+    end)
+end
+
+if LocalPlayer.Character then setupAnimationTracker(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(setupAnimationTracker)
+
+if hookmetamethod then
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if (method == "FireServer" or method == "fireServer") and self.Name == "RemoteEvent" then
+            if args[1] == "LightFuse" then triggerFuse() end
+        end
+        return oldNamecall(self, ...)
+    end)
+end
